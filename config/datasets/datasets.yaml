@@ -1,0 +1,24 @@
+{
+    "mdu_dataset": {
+        module_name: "mdu_dataset",
+        class_name: "MDU_Dataset",
+        name: "mdu",
+        type: "supervised",
+        dataset_path: "./data/hf/markushgrapher-synthetic-training", 
+        encode_position: False,        
+        grounded_smiles: False,
+        encode_index: True, 
+        encode_definition_group: False,
+        condense_labels: True,
+        augment_test: False,
+        udop_tokenizer_only: False,
+        normalize_bbox: False,
+        training_dataset_name: "mdu_3008_aug",
+        mask_ratio: 1,
+        task: "Question Answering",
+        splits: ["train", "test"],
+        load_from_cache: False,
+        apply_ocr: False,
+        stream: False
+    },
+}

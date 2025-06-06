@@ -1,0 +1,63 @@
+{
+    task_name: Question Answering, 
+
+    # Path config
+    model_name_or_path: ./models/09_00_PM_October_30_2024/checkpoint-82500, 
+    tokenizer_path: auto,
+    output_dir: auto, 
+    datasets_config: ./config/datasets/datasets.yaml,
+
+    # Model config
+    max_seq_length: 512,                            
+    image_size: 512,
+    max_seq_length_decoder: 512,
+    model_type: UdopUnimodel,
+    architecture_variant: molscribe-encoder-5,  
+
+    # Task config
+    do_train: True,
+    do_eval: True,
+    do_predict: False,
+
+    # Training config
+    num_train_epochs: 10,
+    dataloader_num_workers: 3, 
+    gradient_accumulation_steps: 4, 
+    per_device_train_batch_size : 3, 
+    per_device_eval_batch_size : 3, 
+    overwrite_output_dir: True,
+    learning_rate: 5.0e-4, 
+    lr_scheduler_type: linear, 
+    warmup_steps: 100, 
+    weight_decay: 0.001, 
+    evaluation_strategy: steps,
+    max_steps: 500000, 
+    eval_steps: 1500,
+    logging_steps: 50,
+    prediction_loss_only: True,
+    label_names: ["labels"],
+    save_strategy: steps,
+    load_best_model_at_end: True,
+    save_steps: 1500,
+    save_total_limit: 3,
+    metric_for_best_model: mdu_lum_test_ar_cxsmi_equality, 
+    greater_is_better: True,                   
+    report_to: 'clearml',
+    log_level: "info",
+    unit: word, 
+    deepspeed: False,
+    fp16: False,
+    bf16: True, # True, False
+
+    # Learning config
+    curriculum: False,                
+    curri_patience: 10,
+    curri_threshold: 0.01,
+    curri_start_MR: 0.5,
+
+    # Loss config
+    loss_fct: CE, 
+
+    # Evaluation config
+    max_eval_samples: 125, 
+}
