@@ -37,7 +37,7 @@ source markushgrapher-env/bin/activate
 pip install -e .
 ```
 
-3. Install [transformers](https://github.com/lucas-morin/transformers). This fork contains the code for the MarkushGrapher architecture. It was written starting from a copy of the UDOP architecture.
+3. Install [transformers](https://github.com/lucas-morin/transformers). This fork contains the code for the MarkushGrapher architecture. It was written starting from a copy of the [UDOP](https://arxiv.org/abs/2212.02623) architecture.
 ```
 git clone https://github.com/lucas-morin/transformers.git ./external/transformers
 pip install -e ./external/transformers
