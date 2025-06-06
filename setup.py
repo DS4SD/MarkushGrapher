@@ -43,7 +43,7 @@ setuptools.setup(
         "numpy==1.24.4",
         "accelerate==0.21.0", 
         "huggingface_hub",
-        "markushgenerator @ git+https://git@github.com/DS4SD/MarkushGenerator-IBM.git",
+        "markushgenerator @ git+https://git@github.com/DS4SD/MarkushGenerator.git",
     ],
     classifiers=[
         "Development Status :: 1 - Planning",
