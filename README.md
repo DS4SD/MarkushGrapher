@@ -1,4 +1,4 @@
-# MarkushGrapher-IBM
+# MarkushGrapher
 
 [![Huggingface](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-MarkushGrapher%0ADatasets%0A-blue)](https://huggingface.co/datasets/ds4sd/MarkushGrapher-Datasets)
 [![arXiv](https://img.shields.io/badge/arXiv-2308.12234-919191.svg)](https://doi.org/10.48550/arXiv.2503.16096)
