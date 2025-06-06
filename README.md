@@ -88,9 +88,8 @@ Note: MarkushGrapher is currently not able to process images without OCR annotat
 ```
 python3.10 -m markushgrapher.eval config/predict.yaml
 ```
-3. Read predictions in ``. 
 
-4. Visualize predictions in: ``. 
+3. Visualize predictions in: `MarkushGrapher/data/visualization/prediction/`. 
 
 ### Training
 
