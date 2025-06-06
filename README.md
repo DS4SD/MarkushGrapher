@@ -28,7 +28,7 @@ If you find this repository useful, please consider citing:
 
 1. Create a virtual environment.
 ```
-python3 -m venv markushgrapher-env
+python3.10 -m venv markushgrapher-env
 source markushgrapher-env/bin/activate
 ```
 
