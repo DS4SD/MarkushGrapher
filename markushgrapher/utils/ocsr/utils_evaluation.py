@@ -244,7 +244,7 @@ def get_smiles_metrics(
                     if model_args.beam_search:
                         predicted_ids = model.generate(
                             **encoding, num_beams=5, max_length=512
-                        )  # TODO Test if it without it, bbox normalization still has no impact.
+                        )  
                     else:
                         predicted_ids = model.generate(
                             **encoding, num_beams=1, max_length=512
