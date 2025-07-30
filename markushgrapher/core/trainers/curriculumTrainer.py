@@ -432,7 +432,7 @@ class CurriculumTrainer(Trainer):
             # Update the observed num examples
             observed_batch_size = find_batch_size(inputs)
 
-            if step > self.training_args.max_eval_samples // observed_batch_size:
+            if step > self.data.max_eval_samples // observed_batch_size:
                 break
 
             if observed_batch_size is not None:
@@ -666,7 +666,7 @@ class CurriculumTrainer(Trainer):
         iou_count = 0
 
         print("--- Starting evaluation ---")
-        for i in tqdm(range(min(len(dataset), self.training_args.max_eval_samples))):
+        for i in tqdm(range(min(len(dataset), self.data_args.max_eval_samples))):
             sample = self.data_collator([dataset[i]])
 
             for key, value in sample.items():
@@ -736,12 +736,12 @@ class CurriculumTrainer(Trainer):
         metrics["iou"] = iou
 
         print(
-            f"Starting get_smiles_metrics with max_eval_samples: {self.training_args.max_eval_samples}"
+            f"Starting get_smiles_metrics with max_eval_samples: {self.data.max_eval_samples}"
         )
         smiles_metrics = get_smiles_metrics(
             model,
             dataset,
-            max_eval_samples=self.training_args.max_eval_samples,
+            max_eval_samples=self.data.max_eval_samples,
             tokenizer=self.tokenizer,
             training_smiles=self.training_smiles,
             markush_tokenizer=self.markush_tokenizer,
