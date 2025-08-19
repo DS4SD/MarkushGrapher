@@ -14,7 +14,7 @@ If you find this repository useful, please consider citing:
 ```
 @InProceedings{Morin_2025_CVPR,
     author    = {Morin, Lucas and Weber, Valery and Nassar, Ahmed and Meijer, Gerhard Ingmar and Van Gool, Luc and Li, Yawei and Staar, Peter},
-    title     = {MarkushGrapher: Joint Visual and Textual Recognition of Markush Structures},
+    title     = {{MarkushGrapher: Joint Visual and Textual Recognition of Markush Structures}},
     booktitle = {Proceedings of the Computer Vision and Pattern Recognition Conference (CVPR)},
     month     = {June},
     year      = {2025},
