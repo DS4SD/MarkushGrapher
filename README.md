@@ -12,15 +12,13 @@ This is the repository for [MarkushGrapher: Joint Visual and Textual Recognition
 If you find this repository useful, please consider citing:
 
 ```
-@article{morin2025markushgrapherjointvisualtextual,
-	title        = {{MarkushGrapher: Joint Visual and Textual Recognition of Markush Structures}},
-	author       = {Lucas Morin and Valéry Weber and Ahmed Nassar and Gerhard Ingmar Meijer and Luc Van Gool and Yawei Li and Peter Staar},
-	year         = 2025,
-	journal      = {arXiv preprint arXiv:2503.16096},
-	url          = {https://arxiv.org/abs/2503.16096},
-	eprint       = {2503.16096},
-	archiveprefix = {arXiv},
-	primaryclass = {cs.CV}
+@InProceedings{Morin_2025_CVPR,
+    author    = {Morin, Lucas and Weber, Valery and Nassar, Ahmed and Meijer, Gerhard Ingmar and Van Gool, Luc and Li, Yawei and Staar, Peter},
+    title     = {MarkushGrapher: Joint Visual and Textual Recognition of Markush Structures},
+    booktitle = {Proceedings of the Computer Vision and Pattern Recognition Conference (CVPR)},
+    month     = {June},
+    year      = {2025},
+    pages     = {14505-14515}
 }
 ```
 
