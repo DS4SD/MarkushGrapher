@@ -2,6 +2,7 @@
 
 [![Huggingface](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-MarkushGrapher%0ADatasets%0A-blue)](https://huggingface.co/datasets/ds4sd/MarkushGrapher-Datasets)
 [![arXiv](https://img.shields.io/badge/arXiv-2308.12234-919191.svg)](https://doi.org/10.48550/arXiv.2503.16096)
+[![CVPR](https://img.shields.io/badge/Paper-CVPR52734.2025.01352-b31b1b.svg)](https://openaccess.thecvf.com/content/CVPR2025/html/Morin_MarkushGrapher_Joint_Visual_and_Textual_Recognition_of_Markush_Structures_CVPR_2025_paper.html)
 
 This is the repository for [MarkushGrapher: Joint Visual and Textual Recognition of Markush Structures](https://arxiv.org/abs/2503.16096).
 
@@ -21,6 +22,7 @@ If you find this repository useful, please consider citing:
 	pages        = {14505--14515}
 }
 ```
+Links: [CVPR](https://openaccess.thecvf.com/content/ICCV2023/html/Morin_MolGrapher_Graph-based_Visual_Recognition_of_Chemical_Structures_ICCV_2023_paper.html), [Arxiv](https://doi.org/10.48550/arXiv.2503.16096) 
 
 ### Installation
 
