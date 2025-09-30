@@ -22,7 +22,6 @@ If you find this repository useful, please consider citing:
 	pages        = {14505--14515}
 }
 ```
-Links: [CVPR](https://openaccess.thecvf.com/content/CVPR2025/html/Morin_MarkushGrapher_Joint_Visual_and_Textual_Recognition_of_Markush_Structures_CVPR_2025_paper.html), [Arxiv](https://doi.org/10.48550/arXiv.2503.16096) 
 
 ### Installation
 
