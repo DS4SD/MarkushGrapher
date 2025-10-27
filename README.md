@@ -7,7 +7,7 @@
 This is the repository for [MarkushGrapher: Joint Visual and Textual Recognition of Markush Structures](https://openaccess.thecvf.com/content/CVPR2025/html/Morin_MarkushGrapher_Joint_Visual_and_Textual_Recognition_of_Markush_Structures_CVPR_2025_paper.html). MarkushGrapher is a model to jointly process visual and
 textual definitions of a Markush structure and converts these to a structured graph and table.
 
-<img src="assets/architecture.png" alt="Description of the image" width="900" />
+<img src="assets/architecture.png" width="900" />
 
 ### Citation 
 
