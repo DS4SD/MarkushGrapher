@@ -11,26 +11,31 @@ from markushgenerator.cxsmiles_tokenizer import CXSMILESTokenizer
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data.sampler import RandomSampler
-from torchvision.ops import generalized_box_iou_loss
 from tqdm import tqdm
 from transformers import Trainer
 from transformers.deepspeed import deepspeed_init
 from transformers.trainer_callback import TrainerCallback
-from transformers.trainer_pt_utils import (IterableDatasetShard,
-                                           find_batch_size, nested_concat,
-                                           nested_numpify, nested_truncate)
-from transformers.trainer_utils import (EvalLoopOutput, EvalPrediction,
-                                        IntervalStrategy,
-                                        denumpify_detensorize, has_length,
-                                        seed_worker)
+from transformers.trainer_pt_utils import (
+    IterableDatasetShard,
+    find_batch_size,
+    nested_concat,
+    nested_numpify,
+    nested_truncate,
+)
+from transformers.trainer_utils import (
+    EvalLoopOutput,
+    EvalPrediction,
+    IntervalStrategy,
+    denumpify_detensorize,
+    has_length,
+    seed_worker,
+)
 
 import markushgrapher.core.common.begin as begin
 from markushgrapher.core.common.markush_tokenizer import MarkushTokenizer
 from markushgrapher.utils.ocsr.utils_evaluation import get_smiles_metrics
-from markushgrapher.utils.ocsr.utils_training import get_training_smiles
 
 from ..common.utils import calculate_iou
-from . import losses
 
 logger = logging.getLogger(__name__)
 
@@ -158,18 +163,35 @@ class CurriculumTrainer(Trainer):
         self.cxsmiles_tokenizer = CXSMILESTokenizer(
             condense_labels=list(yaml_file.values())[0]["condense_labels"]
         )
+
+        # DEBUGGING
+        dataset_path = list(yaml_file.values())[0]["dataset_path"]
+        encode_position = list(yaml_file.values())[0]["encode_position"]
+        grounded_smiles = list(yaml_file.values())[0]["grounded_smiles"]
+        encode_index = list(yaml_file.values())[0]["encode_index"]
+        training_dataset_name = list(yaml_file.values())[0]["training_dataset_name"]
+        condense_labels = list(yaml_file.values())[0]["condense_labels"]
+
+        print(f"-------------------- DEBUGGING --------------------")
+        print(f"Curriculum Trainer: dataset_path: {dataset_path}")
+        print(f"Curriculum Trainer: encode_position: {encode_position}")
+        print(f"Curriculum Trainer: grounded_smiles: {grounded_smiles}")
+        print(f"Curriculum Trainer: encode_index: {encode_index}")
+        print(f"Curriculum Trainer: training_dataset_name: {training_dataset_name}")
+        print(f"Curriculum Trainer: condense_labels: {condense_labels}")
+        print(f"---------------------------------------------------")
+
         self.markush_tokenizer = MarkushTokenizer(
             self.tokenizer,
-            list(yaml_file.values())[0]["dataset_path"],
+            dataset_path=list(yaml_file.values())[0]["dataset_path"],
             encode_position=list(yaml_file.values())[0]["encode_position"],
             grounded_smiles=list(yaml_file.values())[0]["grounded_smiles"],
             encode_index=list(yaml_file.values())[0]["encode_index"],
+            training_dataset_name=list(yaml_file.values())[0]["training_dataset_name"],
             condense_labels=list(yaml_file.values())[0]["condense_labels"],
         )
 
         self.training_smiles = []
-        # self.training_smiles = get_training_smiles(list(yaml_file.values())[0]["dataset_path"], self.cxsmiles_tokenizer, read_training_smiles=True, overwrite_training_smiles=True, verbose=False)
-
         self.clearml_task = clearml_task
         self.global_eval_step = 0
 
@@ -178,21 +200,12 @@ class CurriculumTrainer(Trainer):
             os.path.dirname(__file__)
             + f"/../../../data/visualization/training_debug/{training_args.output_dir.split('/')[-1]}"
         )
-        if not (os.path.exists(p)):
-            os.mkdir(p)
+        if not os.path.exists(p):
+            os.makedirs(p, exist_ok=True)
 
         self.benchmarks_datasets = benchmarks_datasets
 
     def log(self, logs: Dict[str, float]) -> None:
-        # """
-        # Log `logs` on the various objects watching training.
-
-        # Subclass and override this method to inject custom behavior.
-
-        # Args:
-        #     logs (`Dict[str, float]`):
-        #         The values to log.
-        # """
         if self.state.epoch is not None:
             logs["epoch"] = round(self.state.epoch, 2)
 
@@ -395,6 +408,7 @@ class CurriculumTrainer(Trainer):
 
         batch_size = self.args.eval_batch_size
 
+        # shows the test split of the training dataset used
         logger.info(f"***** Running {description} *****")
         if has_length(dataloader):
             logger.info(f"  Num examples = {self.num_examples(dataloader)}")
@@ -402,6 +416,7 @@ class CurriculumTrainer(Trainer):
             logger.info("  Num examples: Unknown")
         logger.info(f"  Batch size = {batch_size}")
 
+        # Set model to eval mode (Disables dropout, batchnorm updates)
         model.eval()
 
         self.callback_handler.eval_dataloader = dataloader
@@ -429,10 +444,11 @@ class CurriculumTrainer(Trainer):
 
         # Main evaluation loop
         for step, inputs in enumerate(dataloader):
+
             # Update the observed num examples
             observed_batch_size = find_batch_size(inputs)
 
-            if step > self.data.max_eval_samples // observed_batch_size:
+            if step > self.data_args.max_eval_samples // observed_batch_size:
                 break
 
             if observed_batch_size is not None:
@@ -597,11 +613,13 @@ class CurriculumTrainer(Trainer):
         if all_inputs is not None:
             all_inputs = nested_truncate(all_inputs, num_samples)
 
+        # Compute Standard Metrics
         if (
             self.compute_metrics is not None
             and all_preds is not None
             and all_labels is not None
         ):
+            print("Compute Standard metrics")
             if args.include_inputs_for_metrics:
                 metrics = self.compute_metrics(
                     EvalPrediction(
@@ -613,11 +631,13 @@ class CurriculumTrainer(Trainer):
                     EvalPrediction(predictions=all_preds, label_ids=all_labels)
                 )
         else:
+            print("Skipping Standard metrics")
             metrics = {}
 
         # To be JSON-serializable, we need to remove numpy types or zero-d tensors
         metrics = denumpify_detensorize(metrics)
 
+        # compute eval_loss
         if all_losses is not None:
             metrics[f"{metric_key_prefix}_loss"] = all_losses.mean().item()
         if hasattr(self, "jit_compilation_time"):
@@ -625,20 +645,22 @@ class CurriculumTrainer(Trainer):
                 self.jit_compilation_time
             )
 
+        # runs evaluation on mdu (i.e., test split of the train dataset)
         print("Starting evaluation synthetic")
         custom_metrics = self.compute_custom_metrics(model, eval_dataset)
         print(f"Evaluation metrics: {custom_metrics}")
 
         metrics.update(custom_metrics)
 
-        for benchmark in ["lum_test", "uspto_markush"]:
+        print(f"benchmarks: {self.model_args.eval_benchmarks}")
+        for benchmark in self.model_args.eval_benchmarks:
             print(f"Starting benchmark evaluation {benchmark}")
             custom_metrics_benchmark = self.compute_custom_metrics(
                 model,
                 self.benchmarks_datasets[benchmark]["mdu"],
                 metrics_prefix=f"{benchmark}_",
             )
-            print(f"Benchmark evaluation metrics: {custom_metrics_benchmark_lum_test}")
+            print(f"Benchmark evaluation metrics: {custom_metrics_benchmark}")
             metrics.update(custom_metrics_benchmark)
 
         for key in list(metrics.keys()):
@@ -735,13 +757,11 @@ class CurriculumTrainer(Trainer):
         metrics["mae"] = mae
         metrics["iou"] = iou
 
-        print(
-            f"Starting get_smiles_metrics with max_eval_samples: {self.data.max_eval_samples}"
-        )
+        print(f"Starting get_smiles_metrics with max_eval_samples: {self.data_args.max_eval_samples}")
         smiles_metrics = get_smiles_metrics(
             model,
             dataset,
-            max_eval_samples=self.data.max_eval_samples,
+            max_eval_samples=self.data_args.max_eval_samples,
             tokenizer=self.tokenizer,
             training_smiles=self.training_smiles,
             markush_tokenizer=self.markush_tokenizer,
@@ -751,6 +771,7 @@ class CurriculumTrainer(Trainer):
             display_samples_output_dir=os.path.dirname(__file__)
             + f"/../../../data/visualization/training_debug/{self.training_args.output_dir.split('/')[-1]}/{self.global_eval_step}/",
             training_args=self.training_args,
+            model_args=self.model_args,
             config=dataset._config,
             read_predictions=False,
             overwrite_predictions=False,
@@ -762,7 +783,43 @@ class CurriculumTrainer(Trainer):
             markush_tokenizer_training=None,
             metrics_prefix=metrics_prefix,
         )
-        metrics.update(smiles_metrics)
+
+        # update the metrics only with the reduced list of metrics specified.
+        reduced_metrics_key_list = [
+            "accuracy",
+            "mae",
+            "iou",
+            "ar_valid",
+            "ar_tanimoto",
+            "ar_is_in_training",
+            "ar_r",
+            "ar_ap",
+            "ar_m",
+            "ar_sg",
+            "ar_r_size",
+            "ar_ap_size",
+            "ar_m_size",
+            "ar_sg_size",
+            "ar_inchi_equality",
+            "ar_cxsmi_equality",
+            "ar_string_equality",
+            "ar_stable_recall",
+            "ar_stable_precision",
+            "ar_stable_equality",
+            "ar_markush_equality",
+            "ar_size",
+            "invalid_gt",
+            "ar_string_equality_opt",
+        ]
+
+        # Build filtered dict using metrics_prefix
+        filtered_smiles_metrics = {
+            metrics_prefix + key: smiles_metrics[metrics_prefix + key]
+            for key in reduced_metrics_key_list
+            if metrics_prefix + key in smiles_metrics
+        }
+
+        metrics.update(filtered_smiles_metrics)
 
         self.global_eval_step += 1
         return metrics
