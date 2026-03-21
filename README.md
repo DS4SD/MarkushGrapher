@@ -1,107 +1,163 @@
-# MarkushGrapher
+<p align="center">
+  <img src="assets/markushgrapher_2_repo_banner.png" alt="MarkushGrapher 2.0 Banner" width="900" />
+</p>
 
-[![Huggingface](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-MarkushGrapher--Datasets%0A-blue)](https://huggingface.co/datasets/ds4sd/MarkushGrapher-Datasets)
-[![arXiv](https://img.shields.io/badge/arXiv-2308.12234-919191.svg)](https://doi.org/10.48550/arXiv.2503.16096)
-[![CVPR](https://img.shields.io/badge/Paper-CVPR52734.2025.01352-b31b1b.svg)](https://openaccess.thecvf.com/content/CVPR2025/html/Morin_MarkushGrapher_Joint_Visual_and_Textual_Recognition_of_Markush_Structures_CVPR_2025_paper.html)
+<p align="center">
+  <a href="https://huggingface.co/datasets/ds4sd/MarkushGrapher-Datasets"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Datasets-blue" alt="Hugging Face Datasets"></a>
+  <a href="https://huggingface.co/ds4sd/MarkushGrapher"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-orange" alt="Hugging Face Model"></a>
+  <a href="https://arxiv.org/abs/2503.16096"><img src="https://img.shields.io/badge/arXiv-2503.16096-919191.svg" alt="arXiv"></a>
+</p>
 
-This is the repository for [MarkushGrapher: Joint Visual and Textual Recognition of Markush Structures](https://openaccess.thecvf.com/content/CVPR2025/html/Morin_MarkushGrapher_Joint_Visual_and_Textual_Recognition_of_Markush_Structures_CVPR_2025_paper.html). MarkushGrapher is a model to jointly process visual and
-textual definitions of a Markush structure and converts these to a structured graph and table.
+---
 
-<img src="assets/architecture.png" width="900" />
+**MarkushGrapher 2.0** is an end-to-end multimodal model for recognizing both molecular structures and Markush structures from chemical document images. It jointly encodes vision, text, and layout modalities to auto-regressively generate CXSMILES representations and substituent tables.
 
-### Citation 
+MarkushGrapher 2.0 substantially outperforms state-of-the-art models — including MolParser, MolScribe, GPT-5, and DeepSeek-OCR — on Markush structure recognition benchmarks, while maintaining competitive performance on standard molecular structure recognition (OCSR).
 
-If you find this repository useful, please consider citing:
+## What's New in 2.0
 
-```
-@inproceedings{Morin_2025_CVPR,
-	title        = {{MarkushGrapher: Joint Visual and Textual Recognition of Markush Structures}},
-	author       = {Morin, Lucas and Weber, Valery and Nassar, Ahmed and Meijer, Gerhard Ingmar and Van Gool, Luc and Li, Yawei and Staar, Peter},
-	year         = 2025,
-	month        = {June},
-	booktitle    = {Proceedings of the Computer Vision and Pattern Recognition Conference (CVPR)},
-	pages        = {14505--14515}
-}
-```
+Compared to [MarkushGrapher 1.0](https://arxiv.org/abs/2503.16096), version 2.0 introduces several major improvements:
 
-### Installation
+- **End-to-End Processing** — A dedicated **ChemicalOCR** module extracts text and bounding boxes directly from images, eliminating the need for external OCR annotations.
+- **Two-Phase Training Strategy** — Phase 1 (Adaptation) aligns the projector and decoder to pretrained OCSR features; Phase 2 (Fusion) introduces the VTL encoder for joint multimodal training, improving encoder fusion.
+- **Universal Recognition** — A single model handles both standard molecular images (SMILES) and multimodal Markush structures (CXSMILES + substituent tables).
+- **New Training Data Pipeline** — Automatic construction of large-scale real-world Markush training data from USPTO MOL files (2010–2025).
+- **New Benchmark: IP5-M** — 1,000 manually annotated Markush structures from patent documents across all five IP5 patent offices (USPTO, JPO, KIPO, CNIPA, EPO).
 
-1. Create a virtual environment.
-```
+## Architecture
+
+<p align="center">
+  <img src="assets/architecture_MG_2.png" alt="MarkushGrapher 2.0 Architecture" width="900" />
+</p>
+
+MarkushGrapher 2.0 employs two complementary encoding pipelines:
+
+1. **Vision Encoder Pipeline** — The input image is processed by an OCSR vision encoder (Swin-B ViT, from MolScribe) followed by an MLP projector.
+2. **Vision-Text-Layout Pipeline** — The image is passed through ChemicalOCR to extract text and bounding boxes, which are then jointly encoded with the image via a VTL encoder (T5-base backbone, UDOP fusion).
+
+The projected vision embedding (e1) is concatenated with the VTL embedding (e2) and fed to a text decoder that auto-regressively generates CXSMILES and substituent tables.
+
+**Model size:** 831M parameters (744M trainable)
+
+## Results
+
+### Markush Structure Recognition (CXSMILES Accuracy)
+
+| Model | M2S | USPTO-M | WildMol-M | IP5-M |
+|---|:---:|:---:|:---:|:---:|
+| MolParser-Base | 39 | 30 | 38.1 | 47.7 |
+| MolScribe | 21 | 7 | 28.1 | 22.3 |
+| GPT-5 | 3 | — | — | — |
+| DeepSeek-OCR | 0 | 0 | 1.9 | 0.0 |
+| MarkushGrapher 1.0 | 38 | 32 | — | — |
+| **MarkushGrapher 2.0** | **56** | **55** | **48.0** | **53.7** |
+
+### Molecular Structure Recognition (SMILES Accuracy)
+
+| Model | WildMol | JPO | UOB | USPTO |
+|---|:---:|:---:|:---:|:---:|
+| MolParser-Base | **76.9** | **78.9** | 91.8 | 93.0 |
+| MolScribe | 66.4 | 76.2 | 87.4 | **93.1** |
+| MolGrapher | 45.5 | 67.5 | 94.9 | 91.5 |
+| **MarkushGrapher 2.0** | 68.4 | 71.0 | **96.6** | 89.8 |
+
+## Installation
+
+1. Create a virtual environment:
+```bash
 python3.10 -m venv markushgrapher-env
 source markushgrapher-env/bin/activate
 ```
 
-2. Install MarkushGrapher.
-```
-pip install -e .
+2. Install MarkushGrapher:
+```bash
+PIP_USE_PEP517=0 pip install -e .
 ```
 
-3. Install [transformers](https://github.com/lucas-morin/transformers). This fork contains the code for the MarkushGrapher architecture. It was written starting from a copy of the [UDOP](https://arxiv.org/abs/2212.02623) architecture.
-```
+3. Install the [transformers fork](https://github.com/lucas-morin/transformers) (contains the MarkushGrapher architecture, built on UDOP):
+```bash
 git clone https://github.com/lucas-morin/transformers.git ./external/transformers
 pip install -e ./external/transformers
 ```
 
-4. Install [MolScribe](https://github.com/lucas-morin/MolScribe.git). This fork contains minor fixes for compatibility with albumentations.
-```
+4. Install the [MolScribe fork](https://github.com/lucas-morin/MolScribe.git) (minor fixes for albumentations compatibility):
+```bash
 git clone https://github.com/lucas-morin/MolScribe.git ./external/MolScribe
 pip install -e ./external/MolScribe --no-deps
 ```
 
-### Model
+## Model Weights
 
-Download the MarkushGrapher model from [HuggingFace](https://huggingface.co/ds4sd/MarkushGrapher/).
-```
+Download the MarkushGrapher model from [HuggingFace](https://huggingface.co/ds4sd/MarkushGrapher/):
+```bash
 huggingface-cli download ds4sd/MarkushGrapher --local-dir ./tmp/ --repo-type model && cp -r ./tmp/models . && rm -r ./tmp/
 ```
 
-Download the MolScribe model from [HuggingFace](https://huggingface.co/yujieq/MolScribe/). 
-```
-wget https://huggingface.co/yujieq/MolScribe/resolve/main/swin_base_char_aux_1m680k.pth -P ./external/MolScribe/ckpts/ 
-```
-
-### Datasets 
-
-Download the datasets from [HuggingFace](https://huggingface.co/datasets/ds4sd/MarkushGrapher-Datasets).
-```
-huggingface-cli download ds4sd/MarkushGrapher-Datasets --local-dir ./data/hf --repo-type dataset
+Download the MolScribe model from [HuggingFace](https://huggingface.co/yujieq/MolScribe/):
+```bash
+wget https://huggingface.co/yujieq/MolScribe/resolve/main/swin_base_char_aux_1m680k.pth -P ./external/MolScribe/ckpts/
 ```
 
-For training, we use:
-1. MarkushGrapher-Synthetic-Training (Synthetic dataset)
+## Datasets
 
-For benchmarking, we use:
-1. M2S (Multi-modal real-world dataset)
-2. USPTO-Markush (Image-only real-world dataset)
-3. MarkushGrapher-Synthetic (Synthetic dataset)
-
-The synthetic datasets are generated using [MarkushGenerator](https://github.com/DS4SD/MarkushGenerator). 
-
-### Inference
-
-Note: MarkushGrapher is currently not able to process images without OCR annotations. The model relies on OCR bounding boxes and text provided as input. 
-
-1. Select a dataset by setting the `dataset_path` parameter in `MarkushGrapher/config/dataset_predict.yaml`.
-
-2. Run MarkushGrapher.
+Download the datasets from [HuggingFace](https://huggingface.co/datasets/ds4sd/MarkushGrapher-Datasets):
+```bash
+huggingface-cli download ds4sd/MarkushGrapher-Datasets --local-dir ./data/datasets/hf --repo-type dataset
 ```
+
+### Training Data
+
+| Phase | Dataset | Size | Type |
+|---|---|---|---|
+| OCR | Synthetic ChemicalOCR | 235k | Synthetic |
+| OCR | IP5 ChemicalOCR | 7k | Real (manually annotated) |
+| Phase 1 (Adaptation) | MolScribe USPTO | 243k | Real (image-SMILES pairs) |
+| Phase 2 (Fusion) | Synthetic CXSMILES | 235k | Synthetic |
+| Phase 2 (Fusion) | MolParser | 91k | Real (converted to CXSMILES) |
+| Phase 2 (Fusion) | USPTO-MOL-M | 54k | Real (auto-extracted from MOL files) |
+
+### Benchmarks
+
+**Markush Structure Recognition:**
+- **M2S** (103) — Real-world multimodal Markush structures with substituent tables
+- **USPTO-M** (74) — Real-world Markush structure images
+- **WildMol-M** (10k) — Large-scale semi-manually annotated Markush structures
+- **IP5-M** (1,000) — *New* — Manually annotated Markush structures from IP5 patent offices (1980–2025)
+
+**Molecular Structure Recognition (OCSR):**
+- USPTO (5,719), JPO (450), UOB (5,740), WildMol (10k)
+
+The synthetic datasets are generated using [MarkushGenerator](https://github.com/DS4SD/MarkushGenerator).
+
+## Inference
+
+```bash
 python3.10 -m markushgrapher.eval config/predict.yaml
 ```
 
-3. Visualize predictions in: `MarkushGrapher/data/visualization/prediction/`. 
+Configure the dataset path in `config/datasets/datasets_predict.yaml`. Predictions are visualized in `data/visualization/prediction/`.
 
-### Training
+## Training
 
-1. Select the training configuration in `MarkushGrapher/config/train.yaml` and `MarkushGrapher/config/datasets/datasets.yaml`.
-
-2. Run training script.
-```
+```bash
 PYTHONUNBUFFERED=1 CUDA_VISIBLE_DEVICES=0 python3.10 -m markushgrapher.train config/train.yaml
 ```
 
-### Acknowledgments
+Configure training in `config/train.yaml` and `config/datasets/datasets.yaml`.
 
-MarkushGrapher uses the code of [UDOP](https://arxiv.org/abs/2212.02623) and the [MolScribe](https://arxiv.org/abs/2205.14311) model. 
+## Acknowledgments
 
-MarkushGrapher was trained from the pre-trained UDOP weights available on [HuggingFace](https://huggingface.co/ZinengTang/Udop) (checkpoint: `udop-unimodel-large-512-300k-steps.zip`).
+MarkushGrapher builds on [UDOP](https://arxiv.org/abs/2212.02623) (Vision-Text-Layout encoder) and [MolScribe](https://arxiv.org/abs/2205.14311) (OCSR vision encoder). The ChemicalOCR module is based on [SmolDocling](https://github.com/DS4SD/SmolDocling). Training was initialized from the pretrained UDOP weights available on [HuggingFace](https://huggingface.co/ZinengTang/Udop).
+
+## Citation
+
+If you find this repository useful, please consider citing:
+
+```bibtex
+@inproceedings{strohmeyer2026markushgrapher2,
+  title     = {MarkushGrapher-2: End-to-end Multimodal Recognition of Chemical Structures},
+  author    = {Strohmeyer, Tim and Morin, Lucas and Meijer, Gerhard Ingmar and Weber, Valery and Nassar, Ahmed and Staar, Peter W. J.},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2026}
+}
+```
