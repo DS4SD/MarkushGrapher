@@ -111,16 +111,10 @@ class MDU_Dataset(Dataset):
         if verbose:
             print(f"Answer: {answer}")
         answer = self.replace_cxsmiles_with_cxsmiles_opt(answer, cxsmiles_star_raw)
-        # print(answer)
 
-        # answer = "<markush><cxsmi>C<r>R1</r>.C1C(CCN1)OC |m:0:2.3.4.5.6,Sg:n:7:n:ht|![[0,0]]</cxsmi><stable>U3:H2As<ns>B6:an alkyl group<ns>R:optional<n>sulfur<n>oxygen<n>as defined in claim 1<ns>V41:a bromine atom<ns>Rq:C20H41<n>C24H49<ns>D30:N<ns>E:N<n>CH</stable></markush>"
         if verbose:
             print(f"Answer  2: {answer}")
 
-        # 01.01 (and 30.10)
-        # page_image = row["page_image"]
-
-        # 25.10 (and 08.11)
         page_image = row["page_image"].resize((512, 512), resample=Image.LANCZOS)
 
         entities_row = {
@@ -132,8 +126,7 @@ class MDU_Dataset(Dataset):
         # Augment
         if (self._split == "train") or (
             (self._config["augment_test"] and self._split == "test")
-        ):  # and (not("lum_test" in self._config["dataset_path"])) or not("uspto_markush" in self._config["dataset_path"]))):
-            # Augment image
+        ):  
             image = np.array(page_image, dtype=np.float32)
             bboxes = []
             for cell in row["cells"]:
@@ -141,7 +134,6 @@ class MDU_Dataset(Dataset):
                 if (bbox == [0, 0, 0, 0]) or (bbox == [1000, 1000, 1000, 1000]):
                     continue
                 # Map bboxes between [0, 1] to [0, image size] and clip bboxes
-                # TODO Extreme bboxes positions should be debugged
                 bbox = [
                     min(
                         max(bbox[0] * page_image.size[0], 0),
@@ -212,13 +204,6 @@ class MDU_Dataset(Dataset):
             # 25.10 (and 08.11)
             image = page_image
 
-            # 30.10
-            # image = np.array(page_image, dtype=np.float32)
-            # transformed = self.transforms_dict_predict["standard"](image=image, bboxes=[])
-            # image = transformed["image"]
-            # image = Image.fromarray(np.uint8(image)).convert('RGB') # TODO check if this conversion has impact on image quality.
-            # TODO check how image quality can be improved during inference.
-
         # Order cells
         # Note: Boxes that should be ordered from left to right are the splitted boxes, after encode_item() and collate().
         # As the splitting code order splitted boxes from left to right, it should be correctly done.
@@ -249,7 +234,7 @@ class MDU_Dataset(Dataset):
 
         logger.debug("--: %s", self._config["task"])
 
-        return encode_item(
+        encoded_item = encode_item(
             item,
             self._processor,
             self._tokenizer,
@@ -258,4 +243,9 @@ class MDU_Dataset(Dataset):
             self._split,
             self.definition_group_selector,
             self._config["encode_definition_group"],
+            verbose=False,
         )
+        return encoded_item
+
+    def get_dataset(self):
+        return self._ds
