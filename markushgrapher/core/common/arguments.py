@@ -1,25 +1,38 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import List, Optional
 
 
 @dataclass
 class DataTrainingArguments:
     task_name: Optional[str] = field(
-        default="ner", metadata={"help": "The name of the task (ner, pos...)."}
+        default="ner", 
+        metadata={
+            "help": "The name of the task (ner, pos...)."
+        }
     )
     unit: Optional[str] = field(
-        default="word", metadata={"help": "The unit of tokenize (word, token)."}
+        default="word", 
+        metadata={
+            "help": "The unit of tokenize (word, token)."
+        }
     )
     curriculum: Optional[str] = field(
         default=False,
-        metadata={"help": "The choice of curriculum learning (True or False)."},
+        metadata={
+            "help": "The choice of curriculum learning (True or False)."
+        },
     )
     curri_patience: Optional[int] = field(
-        default=None, metadata={"help": "Number of times it was not been updated"}
+        default=None, 
+        metadata={
+            "help": "Number of times it was not been updated"
+        }
     )
     curri_threshold: Optional[int] = field(
         default=None,
-        metadata={"help": "Criteria for determining that an update has been made"},
+        metadata={
+            "help": "Criteria for determining that an update has been made"
+        }
     )
     curri_start_MR: Optional[int] = field(
         default=None,
@@ -27,20 +40,23 @@ class DataTrainingArguments:
             "help": "The starting point of masking ratio from curri_start_MR to 100%"
         },
     )
-
     data_type: Optional[str] = field(
         default=None,
-        metadata={"help": "data type json or HF"},
+        metadata={
+            "help": "data type json or HF"
+        }
     )
-
     data_dir: Optional[str] = field(
         default=None,
-        metadata={"help": "local dataset stored location"},
+        metadata={
+            "help": "local dataset stored location"
+        },
     )
-
     dataset_name: Optional[str] = field(
         default=None,
-        metadata={"help": "The name of the dataset to use (via the datasets library)."},
+        metadata={
+            "help": "The name of the dataset to use (via the datasets library)."
+        },
     )
     dataset_config_name: Optional[str] = field(
         default=None,
@@ -50,7 +66,9 @@ class DataTrainingArguments:
     )
     train_file: Optional[str] = field(
         default=None,
-        metadata={"help": "The input training data file (a csv or JSON file)."},
+        metadata={
+            "help": "The input training data file (a csv or JSON file)."
+        },
     )
     validation_file: Optional[str] = field(
         default=None,
@@ -66,11 +84,15 @@ class DataTrainingArguments:
     )
     overwrite_cache: bool = field(
         default=False,
-        metadata={"help": "Overwrite the cached training and evaluation sets"},
+        metadata={
+            "help": "Overwrite the cached training and evaluation sets"
+        },
     )
     preprocessing_num_workers: Optional[int] = field(
         default=8,
-        metadata={"help": "The number of processes to use for the preprocessing."},
+        metadata={
+            "help": "The number of processes to use for the preprocessing."
+        },
     )
     pad_to_max_length: bool = field(
         default=False,
@@ -103,7 +125,9 @@ class DataTrainingArguments:
     )
     image_size: Optional[int] = field(
         default=512,
-        metadata={"help": "image size" "value if set."},
+        metadata={
+            "help": "image size."
+        },
     )
     max_seq_length: int = field(
         default=512,
@@ -121,24 +145,45 @@ class DataTrainingArguments:
     )
     do_save_visualize: bool = field(
         default=False,
-        metadata={"help": "Whether to save visualizations in predict"},
+        metadata={
+            "help": "Whether to save visualizations in predict"
+        },
     )
     viz_out_dir: Optional[str] = field(
         default=None,
-        metadata={"help": "Where to save the output visualization from predic."},
+        metadata={
+            "help": "Where to save the output visualization from predict."
+        },
     )
     apply_ocr: bool = field(
         default=False,
-        metadata={"help": "Whether to apply tesseract OCR or cells"},
+        metadata={
+            "help": "Whether to apply tesseract OCR or cells"
+        },
     )
     datasets_config: Optional[str] = field(
         default=None,
-        metadata={"help": "local dataset stored location"},
+        metadata={
+            "help": "local dataset stored location"
+        },
     )
-
     max_eval_samples: int = field(
         default=1000,
-        metadata={"help": "The number of samples to use for the training on-fly evaluation."},
+        metadata={
+            "help": "The number of samples to use for the training on-fly evaluation."
+        },
+    )
+    clearml_task_name: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "The name given to the clearml task"
+        },
+    )
+    use_pretrained_molscribe: Optional[bool] = field(
+        default=True,
+        metadata={
+            "help": "Whether to use the pretrained molscribe weights"
+        },
     )
 
 
@@ -156,10 +201,21 @@ class ModelArguments:
     )
     tokenizer_path: str = field(
         default=None,
-        metadata={"help": "Path to tokenizer from huggingface.co/models"},
+        metadata={
+            "help": "Path to tokenizer from huggingface.co/models"
+        },
     )
     model_type: str = field(
-        default=None, metadata={"help": "Model type selected in the list."}
+        default=None, 
+        metadata={
+            "help": "Model type selected in the list."
+        }
+    )
+    config_name: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Model type selected in the list."
+        }
     )
     config_name: Optional[str] = field(
         default=None,
@@ -201,20 +257,85 @@ class ModelArguments:
     )
     loss_fct: str = field(
         default="CE",
-        metadata={"help": "Loss function for location tokens. Default: None"},
+        metadata={
+            "help": "Loss function for location tokens. Default: None"
+        },
     )
-
     architecture_variant: str = field(
-        default='none',
-        metadata={"help": "The MarkushGrapher architecture variant."},
+        default="none",
+        metadata={
+            "help": "The MarkushGrapher architecture variant."
+        },
     )
-    
     beam_search: bool = field(
         default=False,
-        metadata={"help": "Whether to use beam search."},
+        metadata={
+            "help": "Whether to use beam search."
+        },
     )
-    
     normalize_bbox: bool = field(
         default=False,
-        metadata={"help": "Whether to normalize OCR boxes to [0, 1]."},
+        metadata={
+            "help": "Whether to normalize OCR boxes to [0, 1]."
+        },
     )
+    eval_benchmarks: List[str] = field(
+        default_factory=lambda: [
+            "wildmol_m",
+            "uspto_clean",
+            "uspto_markush",
+            "ip5_m",
+        ],
+        metadata={
+            "help": "The datasets to evaluate on the fly"
+        },
+    )
+    save_model_weights_seperately: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to save model_weights separately"
+        },
+    )
+    load_submodule_weights: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use the saved submodule weights"
+        },
+    )
+    vtl_encoder_weights_filepath: Optional[str] = field(
+        default="",
+        metadata={
+            "help": "Path to encoder weights directory"
+        },
+    )
+    vtl_decoder_weights_filepath: Optional[str] = field(
+        default="",
+        metadata={
+            "help": "Path to decoder weights directory"
+        },
+    )
+    mlp_projector_weights_filepath: Optional[str] = field(
+        default="",
+        metadata={
+            "help": "Path to molscribe projector weights directory"
+        },
+    )
+    freeze_ocsr_encoder: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to freeze the encoder"
+        },
+    )
+    freeze_vtl_decoder: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to freeze the decoder"
+        },
+    )
+    freeze_mlp_projector: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to freeze the projector"
+        },
+    )
+
