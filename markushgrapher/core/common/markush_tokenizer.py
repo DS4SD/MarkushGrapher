@@ -24,6 +24,7 @@ class MarkushTokenizer:
         else:
             self.substituents_separator = "<n>"
         print(f"Substituents separator is: {self.substituents_separator}")
+
         self.tokenizer = tokenizer
         if training_dataset_name:
             self.training_dataset_name = training_dataset_name
@@ -33,6 +34,7 @@ class MarkushTokenizer:
             print(
                 f"self.training_dataset_name (automatically set): {self.training_dataset_name}"
             )
+
         self.encode_position = encode_position
         self.grounded_smiles = grounded_smiles
         self.condense_labels = condense_labels
@@ -40,8 +42,11 @@ class MarkushTokenizer:
         self.encode_index = encode_index
         self.set_vocabulary()
 
+    # ── Substitution table helpers ───────────────────────────────────────
+
     def compress_stable(self, stable):
-        # Compact lists of variable groups
+        """Compact variable groups with identical substituents, and compress consecutive integer lists."""
+        # Merge keys that share the same value list
         value_to_keys = {}
         for key, value in stable.items():
             value_tuple = tuple(value)
@@ -54,7 +59,7 @@ class MarkushTokenizer:
             merged_key = ",".join(keys)
             stable[merged_key] = list(value)
 
-        # Compress lists of integers
+        # Compress consecutive integer lists (e.g. [1,2,3,4] -> "1-4")
         for label, substituents in stable.items():
             are_substituents_integers = False
             substituents_values = []
@@ -67,7 +72,6 @@ class MarkushTokenizer:
                     continue
 
             if are_substituents_integers:
-                # Test if indices are consecutives
                 if substituents_values == list(
                     range(min(substituents_values), max(substituents_values) + 1)
                 ):
@@ -80,7 +84,8 @@ class MarkushTokenizer:
         return stable
 
     def get_stable(self, text, verbose=False):
-        # Get stable string
+        """Extract and parse the substitution table from a prediction string."""
+        # Extract stable string
         try:
             stable_string = re.search(
                 re.escape("<stable>") + r"(.*?)" + re.escape("</stable>"), text
@@ -89,33 +94,25 @@ class MarkushTokenizer:
             if verbose:
                 print(f"Error {e} in get_stable for {text}")
             postprocessed_stable = False
-            if not ("</stable>" in text) and not ("</markush>" in text):
-                """
-                Display incomplete predictions, as:
-                    <markush> <cxsmi> [ R ] C . C 1 [ Y ] N 2 C [ Z ] C 1 C 2 . C S O . [ R 3 ] C |m:9:6.5.4.7,m:13:2.3.4.7.8,m:1:4.7.6.5.4 </cxsmi> <stable>
-                    R : Alkyl , aryl-oxidel  <ns> R 1 , R 2 , R 3  <ns> Y : O , S , NH , N-alkane , N-aryl , N-acyl  <ns> Z : Hydro , Alkyl , NH , O-alkane ,
-                    O-alkyl , O-aryl , S-alkane , N-aryl , N-aryl  <ns> R : Sodium , Alkyl , NH , O-alkane , O-alkane , O-alkane , O-alkane , S-alkane , S-alkane ,
-                    N-Aldiminium , N-aryl , N-aryl  <ns> R : Sodium , Alkyl , NH , O-alkane , O-Alkyl , O-aryl , S-alkanl , N-Aldinism , N-aryl , N-aryl  <ns> R : Sodium ,
-                    Alkyl , NH , O-alkane , O-alkane , S-alkanl , S-aryl , S-alkanl , N-aryl , N-aryl  <ns> R : Sodium , Alkanl , aryl , O-alkane , S-alkanl , S-alkanl ,
-                    S-alkane , N-Aldinism , N-aryl , N-ary
-                """
-                if ("<stable>" in text) and (len(text.split("<stable>")) >= 2):
+            if "</stable>" not in text and "</markush>" not in text:
+                # Handle incomplete predictions that have <stable> but no closing tag
+                if "<stable>" in text and len(text.split("<stable>")) >= 2:
                     stable_string = text.split("<stable>")[1]
                     postprocessed_stable = True
-            if not (postprocessed_stable):
+            if not postprocessed_stable:
                 return None
 
-        # Get stable
+        # Parse stable into dict
         try:
             stable = {}
             for item in stable_string.split(self.rtable_item_separator):
-                if not (len(item.split(":"))) > 1:
+                if not len(item.split(":")) > 1:
                     continue
                 substituents = []
                 for s in item.split(":")[1].split(self.substituents_separator):
                     if s[0] == " ":
                         s = s[1:]
-                    if (len(s) > 0) and (s[-1] == " "):
+                    if len(s) > 0 and s[-1] == " ":
                         s = s[:-1]
                     substituents.append(s)
 
@@ -123,18 +120,18 @@ class MarkushTokenizer:
                 for label in labels.split(self.substituents_separator):
                     stable[label] = substituents
 
-            # Convert lists of integers (1-10) to lists of integers (1, 2, 3, 4)
+            # Expand compressed integer ranges (e.g. "1-10" -> [1, 2, ..., 10])
             for label, substituents in stable.items():
                 sustituents_to_add = []
                 sustituents_to_remove = []
                 for substituent in substituents:
-                    if not ("-" in substituent):
+                    if "-" not in substituent:
                         continue
                     limits = [
                         (int(a), int(b))
-                        for a, b in re.findall("(\d+)-(\d+)", substituent)
+                        for a, b in re.findall(r"(\d+)-(\d+)", substituent)
                     ]
-                    if (len(limits) == 0) or (len(limits) > 1):
+                    if len(limits) == 0 or len(limits) > 1:
                         continue
                     if not (substituent == str(limits[0][0]) + "-" + str(limits[0][1])):
                         continue
@@ -158,12 +155,14 @@ class MarkushTokenizer:
             return None
         return stable
 
+    # ── Vocabulary ───────────────────────────────────────────────────────
+
     def select_vocab_files(self):
         vocabulary_files = []
         if (
-            (self.training_dataset_name == "ocxsr_12")
-            or (self.training_dataset_name == "ocxsr_17")
-            or (self.training_dataset_name == "ocxsr_19")
+            self.training_dataset_name == "ocxsr_12"
+            or self.training_dataset_name == "ocxsr_17"
+            or self.training_dataset_name == "ocxsr_19"
         ):
             vocabulary_files = [
                 os.path.dirname(__file__) + "/../../../data/vocabulary/ocxsr_12.json"
@@ -173,8 +172,9 @@ class MarkushTokenizer:
                 + "/../../../data/vocabulary/ocxsr_12_atoms.json"
             )
 
-        elif (self.training_dataset_name == "ocsr_3") or (
-            self.training_dataset_name == "ocsr_test"
+        elif (
+            self.training_dataset_name == "ocsr_3"
+            or self.training_dataset_name == "ocsr_test"
         ):
             if self.encode_position and self.grounded_smiles:
                 vocabulary_files = [
@@ -188,7 +188,7 @@ class MarkushTokenizer:
             else:
                 vocabulary_files = [
                     os.path.dirname(__file__) + "/../../../data/vocabulary/ocsr_3.json"
-                ]  # 04_09_PM_June_22_2024
+                ]
                 atom_vocabulary_file = (
                     os.path.dirname(__file__)
                     + "/../../../data/vocabulary/ocsr_vocab_atoms.json"
@@ -209,10 +209,10 @@ class MarkushTokenizer:
             )
 
         elif (
-            (self.training_dataset_name == "ocxsr_2")
-            or (self.training_dataset_name == "ocxsr_m_2")
-            or (self.training_dataset_name == "ocxsr_11")
-            or (self.training_dataset_name == "ocxsr_test")
+            self.training_dataset_name == "ocxsr_2"
+            or self.training_dataset_name == "ocxsr_m_2"
+            or self.training_dataset_name == "ocxsr_11"
+            or self.training_dataset_name == "ocxsr_test"
         ):
             vocabulary_files = [
                 os.path.dirname(__file__) + "/../../../data/vocabulary/ocxsr_2.json"
@@ -235,42 +235,40 @@ class MarkushTokenizer:
         return vocabulary_files, atom_vocabulary_file
 
     def set_vocabulary(self):
-        first_index = 0  # By default, 200 other tokens are available.
+        first_index = 0
         vocabulary = []
 
         # Set base tokens
         if "ocsr" in self.training_dataset_name:
             vocabulary.extend(["<smi>", "</smi>"])
-            print("SMILES token <smi> added")
+            print("SMILES tokens added: <smi>, </smi>")
         else:
-            # Default
             if "mdu_2002" in self.training_dataset_name:
                 vocabulary.extend(["<cxsmi>", "</cxsmi>"])
-                print("CXSMILES token <cxsmi> added")
+                print("CXSMILES tokens added: <cxsmi>, </cxsmi>")
             else:
+                # Default: full Markush token set
                 vocabulary.extend(["<cxsmi>", "</cxsmi>", "<r>", "</r>"])
-                print("CXSMILES token <cxsmi> <r> added")
+                print("CXSMILES tokens added: <cxsmi>, </cxsmi>, <r>, </r>")
 
-        if "mdu" in self.training_dataset_name:
-            vocabulary.extend(
-                [
+                vocabulary.extend([
                     "<markush>",
                     "</markush>",
                     "<stable>",
                     "</stable>",
                     self.substituents_separator,
                     self.rtable_item_separator,
-                ]
-            )
-            print(
-                f"Markush tokens <markush> <stable> {self.substituents_separator} {self.rtable_item_separator} added"
-            )
+                ])
+                print(
+                    f"Markush tokens added: <markush>, </markush>, <stable>, </stable>, "
+                    f"{self.substituents_separator}, {self.rtable_item_separator}"
+                )
 
         if self.encode_index:
             vocabulary.extend(["<i>", "</i>"])
-            print("Index token <i> added")
+            print("Index tokens added: <i>, </i>")
 
-        # Select vocabulary
+        # Load vocabulary files
         vocabulary_files, atom_vocabulary_file = self.select_vocab_files()
         with open(atom_vocabulary_file) as f:
             self.vocabulary_atoms = list(json.load(f).keys())
@@ -285,6 +283,8 @@ class MarkushTokenizer:
             f"<other_{first_index + i}>": vocabulary[i] for i in range(len(vocabulary))
         }
         self.max_vocabulary_range = len(self.vocabulary)
+
+    # ── Utility methods ──────────────────────────────────────────────────
 
     def cap(self, value):
         if value > 500:
@@ -301,6 +301,8 @@ class MarkushTokenizer:
             atom.AddAtom(a)
             atoms_chars.append(Chem.MolToSmiles(atom))
         return atoms_chars
+
+    # ── Encode SMILES ────────────────────────────────────────────────────
 
     def encode_smi(self, label):
         output = []
@@ -319,8 +321,9 @@ class MarkushTokenizer:
             else:
                 print(f"{token} not found in vocabulary!")
                 output.append(self.tokenizer._convert_token_to_id("<unk>"))
-            if self.encode_position and (token in self.vocabulary_atoms):
-                # Error: the atoms order in "atom_boxes" and in "atomwise_tokenizer" could be different
+
+            if self.encode_position and token in self.vocabulary_atoms:
+                # Note: atoms order in "atom_boxes" and "atomwise_tokenizer" could differ
                 x_min_position = self.cap(int(atom_boxes[i][0] * 500 / 1024))
                 y_min_position = self.cap(int(atom_boxes[i][1] * 500 / 1024))
                 x_max_position = self.cap(int(atom_boxes[i][2] * 500 / 1024))
@@ -342,6 +345,8 @@ class MarkushTokenizer:
         output.append(self.tokenizer._convert_token_to_id(self.vocabulary["</smi>"]))
         return output
 
+    # ── Encode CXSMILES ──────────────────────────────────────────────────
+
     def encode_cxsmi(self, label, verbose=False):
         if verbose:
             print(f"Encode index in encode_cxsmi: {self.encode_index}")
@@ -358,11 +363,7 @@ class MarkushTokenizer:
             rtable = "|" + cxsmiles_opt.split("|")[1]
         i = 0
 
-        # Debug
-        # cxsmiles_opt = "[H]C=C(N)c1cc(NC)<r>Rr</r>[nH]1"
-        # cxsmiles_opt = "<r>Z</r>=NSCC(O)<r>G55</r>(O)CSN=O</cxsmi></s>"
-
-        if not ("mdu_2002" in self.training_dataset_name) or not (self.condense_labels):
+        if "mdu_2002" not in self.training_dataset_name or not self.condense_labels:
             # Replace <r> and </r> with "[" and "]" for using atomwise_tokenizer()
             rgroups_starting_indices_shifted = []
             for match in re.finditer(r"(<r>(.*?)</r>)", cxsmiles_opt):
@@ -383,17 +384,17 @@ class MarkushTokenizer:
                 current_positions = cxsmiles_opt.find(f"<r>{rgroup}</r>")
                 updated_index = original_index - length_adjustment
                 rgroups_starting_indices.append(updated_index)
+                # <r> -> [ is 3->1 chars, </r> -> ] is 4->1 chars
                 length_adjustment += (3 - 1) + (4 - 1)
             cxsmiles_opt = cxsmiles_opt.replace("<r>", "[").replace("</r>", "]")
 
         if verbose:
             print("rgroups_starting_indices", rgroups_starting_indices)
 
+        # Tokenize the SMILES part (before the "|")
         cxsmiles_opt_i = 0
         for token in atomwise_tokenizer(cxsmiles_opt.split("|")[0]):
-            if not ("mdu_2002" in self.training_dataset_name) or not (
-                self.condense_labels
-            ):
+            if "mdu_2002" not in self.training_dataset_name or not self.condense_labels:
                 cxsmiles_opt_i += len(token)
                 if verbose:
                     print("cxsmiles_opt_i", cxsmiles_opt_i)
@@ -401,16 +402,12 @@ class MarkushTokenizer:
                 if (cxsmiles_opt_i - len(token)) in rgroups_starting_indices:
                     token = token.replace("[", "<r>").replace("]", "</r>")
 
-            # If token is atom
             if token in self.vocabulary:
                 output.append(
                     self.tokenizer._convert_token_to_id(self.vocabulary[token])
                 )
 
-                if self.encode_index and (
-                    token in self.vocabulary_atoms
-                ):  # and (rdkit_atom_tokens != []):
-                    # if token == rdkit_atom_tokens[i]:
+                if self.encode_index and token in self.vocabulary_atoms:
                     output.append(
                         self.tokenizer._convert_token_to_id(self.vocabulary["<i>"])
                     )
@@ -419,12 +416,13 @@ class MarkushTokenizer:
                         self.tokenizer._convert_token_to_id(self.vocabulary["</i>"])
                     )
                     i += 1
-            elif ("<r>" in token) and ("</r>" in token):
+
+            elif "<r>" in token and "</r>" in token:
+                # R-group label token
                 output.append(
                     self.tokenizer._convert_token_to_id(self.vocabulary["<r>"])
                 )
                 for c in token.replace("<r>", "").replace("</r>", ""):
-                    # By default sequences encoded with self.tokenizer.encode() start with a space.
                     output.extend(self.tokenizer.encode(c)[:-1])
                 output.append(
                     self.tokenizer._convert_token_to_id(self.vocabulary["</r>"])
@@ -438,15 +436,13 @@ class MarkushTokenizer:
                         self.tokenizer._convert_token_to_id(self.vocabulary["</i>"])
                     )
                     i += 1
+
             else:
-                if "mdu_2002" in self.training_dataset_name or not (
-                    self.condense_labels
-                ):
+                if "mdu_2002" in self.training_dataset_name or not self.condense_labels:
                     for c in token:
                         output.extend(self.tokenizer.encode(c)[:-1])
-                    if (
-                        "[" in token and self.encode_index
-                    ):  # R-label in cxsmiles_opt (such as [R1])
+                    if "[" in token and self.encode_index:
+                        # R-label in cxsmiles_opt (such as [R1])
                         output.append(
                             self.tokenizer._convert_token_to_id(self.vocabulary["<i>"])
                         )
@@ -457,9 +453,9 @@ class MarkushTokenizer:
                         i += 1
                 else:
                     for c in token:
-                        # By default sequences encoded with self.tokenizer.encode() start with a space.
                         output.extend(self.tokenizer.encode(c)[:-1])
 
+        # Encode the R-table part (after the "|")
         if len(cxsmiles_opt.split("|")) > 1:
             sections = rtable[1:].split(",")
             new_sections = []
@@ -467,6 +463,7 @@ class MarkushTokenizer:
                 if sections[i][0] == "m":
                     new_sections.append(sections[i])
                 if sections[i][:2] == "Sg":
+                    # Sg sections span multiple comma-separated parts
                     merged_section = sections[i] + ","
                     j = i + 1
                     while (j < len(sections) and sections[j][0] != "m") and (
@@ -478,31 +475,27 @@ class MarkushTokenizer:
                     new_sections.append(merged_section)
 
             output.append(self.tokenizer._convert_token_to_id("|"))
-            if not (self.condense_labels):
+            if not self.condense_labels:
                 output.append(self.tokenizer._convert_token_to_id("$"))
                 for c in cxsmiles_opt.split("$")[1]:
                     output.append(self.tokenizer._convert_token_to_id(c))
                 output.append(self.tokenizer._convert_token_to_id("$"))
                 output.append(self.tokenizer._convert_token_to_id(","))
-            # Parse R-table
+
             for section in new_sections:
-                if section[0] in "m":  # m:0:15.16.17.18.19.20
+                if section[0] == "m":  # m:0:15.16.17.18.19.20
                     m = section.split(":")[0]
                     atom_connector = section.split(":")[1]
                     atom_rings = section.split(":")[2].split(".")
 
                     for c in f"{m}:":
-                        # Encode character per character
                         output.append(self.tokenizer._convert_token_to_id(c))
                     output.append(self.tokenizer._convert_token_to_id(atom_connector))
                     output.append(self.tokenizer._convert_token_to_id(":"))
                     for atom_ring in atom_rings:
-                        # Encode index per index
-                        output.append(
-                            self.tokenizer._convert_token_to_id(atom_ring)
-                        )  # Do not split atom indices
+                        output.append(self.tokenizer._convert_token_to_id(atom_ring))
                         output.append(self.tokenizer._convert_token_to_id("."))
-                    output = output[:-1]
+                    output = output[:-1]  # remove trailing "."
 
                 if section[:2] == "Sg":  # Sg:n:11,12:F:ht
                     sg = section.split(":")[0]
@@ -510,23 +503,21 @@ class MarkushTokenizer:
                     indices = section.split(":")[2].split(",")
                     end = ":" + ":".join(section.split(":")[3:])
                     for c in f"{sg}:{label}:":
-                        # Encode character per character
                         output.append(self.tokenizer._convert_token_to_id(c))
-
                     for index in indices:
-                        # Encode index per index
                         output.append(self.tokenizer._convert_token_to_id(index))
                         output.append(self.tokenizer._convert_token_to_id(","))
-                    output = output[:-1]
-
+                    output = output[:-1]  # remove trailing ","
                     for c in end:
-                        # Encode character per character
                         output.append(self.tokenizer._convert_token_to_id(c))
+
                 output.append(self.tokenizer._convert_token_to_id(","))
-            output = output[:-1]
+            output = output[:-1]  # remove trailing ","
 
         output.append(self.tokenizer._convert_token_to_id(self.vocabulary["</cxsmi>"]))
         return output
+
+    # ── Encode substitution table ────────────────────────────────────────
 
     def encode_stable(self, label, verbose=False):
         output = []
@@ -539,22 +530,25 @@ class MarkushTokenizer:
 
         for i in range(len(segments) // 2):
             substituent_labels, substituents = segments[2 * i], segments[2 * i + 1]
+
+            # Encode substituent labels (e.g. "R1,R2")
             for substituent_label in substituent_labels.split(
                 self.substituents_separator
             ):
                 for c in substituent_label:
-                    # Encode character per character
                     output.extend(self.tokenizer.encode(c)[:-1])
                 output.append(
                     self.tokenizer._convert_token_to_id(
                         self.vocabulary[self.substituents_separator]
                     )
                 )
-            output = output[:-1]
+            output = output[:-1]  # remove trailing separator
+
             output.extend(self.tokenizer.encode(":")[:-1])
+
+            # Encode substituent values
+            # Example: "a halogen atom" -> ['▁', 'a', '▁', 'hal', 'ogen', '▁', 'atom']
             for substituent in substituents.split(self.substituents_separator):
-                # Encode substituent per substituent
-                # Example: a hologen atom -> ['▁', 'a', '▁', 'hal', 'ogen', '▁', 'atom']
                 output.extend(self.tokenizer.encode(substituent)[:-1])
                 if self.substituents_separator == ",":
                     output.extend(self.tokenizer.encode(",")[:-1])
@@ -564,16 +558,20 @@ class MarkushTokenizer:
                             self.vocabulary[self.substituents_separator]
                         )
                     )
-            output = output[:-1]
+            output = output[:-1]  # remove trailing separator
+
             output.append(
                 self.tokenizer._convert_token_to_id(
                     self.vocabulary[self.rtable_item_separator]
                 )
             )
+
         if len(output) > 2:
-            output = output[:-1]
+            output = output[:-1]  # remove trailing item separator
         output.append(self.tokenizer._convert_token_to_id(self.vocabulary["</stable>"]))
         return output
+
+    # ── Encode full Markush structure ────────────────────────────────────
 
     def encode_markush(self, label, verbose=False):
         output = []
@@ -589,7 +587,7 @@ class MarkushTokenizer:
         )
         output.extend(self.encode_cxsmi(cxsmiles_label))
 
-        # Encode substituents tables
+        # Encode substitution table
         stable_label = (
             "<stable>"
             + re.search(
@@ -604,57 +602,87 @@ class MarkushTokenizer:
         )
         return output
 
+    # ── Decode helpers ───────────────────────────────────────────────────
+
     def clean_cxsmiles_spaces(self, input_string):
         pattern = r"(<cxsmi>)(.*?)(</cxsmi>)"
 
         def replace_underscores(match):
-            return f"{match.group(1)}{match.group(2).replace('▁','')}{match.group(3)}"
+            return f"{match.group(1)}{match.group(2).replace('▁', '')}{match.group(3)}"
 
-        result_string = re.sub(pattern, replace_underscores, input_string)
-        return result_string
+        return re.sub(pattern, replace_underscores, input_string)
 
     def decode_plus_decode_other_tokens(
         self, tokens, permissive_parsing=False, verbose=False
     ):
         decoded_tokens = self.tokenizer.convert_ids_to_tokens(tokens)
+
         if verbose:
-            print(f"Decoded tokens: {decoded_tokens}")
             decoded_sequence_raw = ""
             for t in decoded_tokens:
                 if t in self.vocabulary_inverse:
-                    print(t, self.vocabulary_inverse[t])
                     decoded_sequence_raw += self.vocabulary_inverse[t]
                 else:
                     decoded_sequence_raw += t
             print("decoded_sequence_raw:", decoded_sequence_raw)
+
         output_str = ""
         skip_next = False
         for i_token, token in enumerate(decoded_tokens):
             if skip_next:
-                if self.encode_index and (token != (self.vocabulary["</i>"])):
+                if self.encode_index and token != self.vocabulary["</i>"]:
                     continue
             skip_next = False
-            if self.encode_index and (self.vocabulary["<i>"] in token):
+
+            if self.encode_index and self.vocabulary["<i>"] in token:
                 skip_next = True
             if self.encode_index and skip_next:
                 continue
-            if self.encode_index and (self.vocabulary["</i>"] in token):
+            if self.encode_index and self.vocabulary["</i>"] in token:
                 continue
-            if ("loc" in token) and ("<" in token) and (">" in token):
+
+            # Skip location tokens
+            if "loc" in token and "<" in token and ">" in token:
                 continue
-            if ("other" in token) and ("<" in token) and (">" in token):
-                output_str += self.vocabulary_inverse[token] + " "
+
+            # Decode vocabulary tokens
+            if "other" in token and "<" in token and ">" in token:
+                if token in self.vocabulary_inverse:
+                    output_str += self.vocabulary_inverse[token] + " "
+                else:
+                    print(
+                        f"WARNING: Token: {token} is not in vocabulary. Printing raw token instead"
+                    )
+                    output_str += token
             else:
-                # Remove "▁" in the predicted sequence
+                # Remove leading "▁" (sentencepiece space marker)
                 if token[0] == "▁":
                     token = token[1:]
-                if ((i_token + 1) < len(decoded_tokens)) and (
-                    ("▁" in decoded_tokens[i_token + 1])
-                    or ("other" in decoded_tokens[i_token + 1])
+                if (i_token + 1) < len(decoded_tokens) and (
+                    "▁" in decoded_tokens[i_token + 1]
+                    or "other" in decoded_tokens[i_token + 1]
                 ):
-                    # Add a space if the next token is also a starting sequence, or a SMILES token
+                    # Add a space if the next token starts a new sequence or is a SMILES token
                     output_str += token + " "
                 else:
-                    # If the next token is not a starting sequence, the space is already encoded
                     output_str += token
+
         return output_str
+
+    def decode_plus_decode_other_tokens_raw(
+        self, tokens, permissive_parsing=False, verbose=False
+    ):
+        """Like decode_plus_decode_other_tokens but returns a raw token list."""
+        decoded_tokens = self.tokenizer.convert_ids_to_tokens(tokens)
+        output_list = []
+        decoded_sequence_raw = ""
+        for t in decoded_tokens:
+            if t in self.vocabulary_inverse:
+                decoded_sequence_raw += self.vocabulary_inverse[t]
+                output_list.append(self.vocabulary_inverse[t])
+            else:
+                decoded_sequence_raw += t
+                output_list.append(t)
+        if verbose:
+            print("decoded_sequence_raw:", decoded_sequence_raw)
+        return output_list
