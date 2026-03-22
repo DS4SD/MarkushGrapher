@@ -74,6 +74,7 @@ def get_smiles_metrics(
     cxsmiles_tokenizer_training=None,
     metrics_prefix="",
     remove_stereo=True,
+    fix_smiles=True,
 ):
 
     if markush_tokenizer_training is None:
@@ -237,7 +238,8 @@ def get_smiles_metrics(
             # Fix gt_smiles (expand, replace eom etc.)
             dataset_name = os.path.basename(config["dataset_path"])
             print(f"dataset_name: {dataset_name}")
-            if dataset_name in ["molscribe_uspto_mol_100", "USPTO-fixed-chemocr-v4-2", "JPO-fixed-chemocr-v4-2","USPTO-fixed-chemocr-v4-2-crop","UOB-fixed-chemocr-v4-2-crop", "JPO-fixed-chemocr-v4-2-crop", "molparser-test-markush-10k-converted-without-debug-image-scale-1.0-chemocr-v4-2", "molparser-test-simple-10k-converted-without-debug-image-scale-1.0-chemocr-v4-2"] or metrics_prefix in ["uspto_clean_", "wildmol_", "wildmol_m_", "wildmol_"] or metrics_prefix in ["mdu_uspto_clean", "mdu_wildmol", "mdu_wildmol_m", "mdu_wildmol"] or metrics_prefix in ["mdu_uspto_clean_", "mdu_wildmol_", "mdu_wildmol_m_", "mdu_wildmol_"]:
+    
+            if fix_smiles:
                 print(f"Fix the cxsmiles")
                 print(f"gt_smiles (before fixing): {gt_smiles}")
                 gt_smiles = fix_cxsmiles(gt_smiles, abb)
@@ -359,7 +361,7 @@ def get_smiles_metrics(
                     print(f"predicted_smiles: {predicted_smiles}")
 
                 # Fix the predicted SMILES
-                if dataset_name in ["molscribe_uspto_mol_100", "USPTO-fixed-chemocr-v4-2", "JPO-fixed-chemocr-v4-2","USPTO-fixed-chemocr-v4-2-crop", "UOB-fixed-chemocr-v4-2-crop", "JPO-fixed-chemocr-v4-2-crop", "molparser-test-markush-10k-converted-without-debug-image-scale-1.0-chemocr-v4-2", "molparser-test-simple-10k-converted-without-debug-image-scale-1.0-chemocr-v4-2"] or metrics_prefix in ["uspto_clean_", "wildmol_", "wildmol_m_", "wildmol_"] or metrics_prefix in ["mdu_uspto_clean", "mdu_wildmol", "mdu_wildmol_m", "mdu_wildmol"] or metrics_prefix in ["mdu_uspto_clean_", "mdu_wildmol_", "mdu_wildmol_m_", "mdu_wildmol_"]:
+                if fix_smiles:
                     predicted_smiles = fix_cxsmiles(predicted_smiles, abb)
                     if verbose:
                         print(f"fixed_predicted_smiles: {predicted_smiles}")

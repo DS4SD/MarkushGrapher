@@ -12,7 +12,6 @@ from markushgrapher.core.common.markush_tokenizer import MarkushTokenizer
 from markushgrapher.utils.common import read_yaml_file
 from markushgrapher.utils.ocsr.utils_evaluation import get_smiles_metrics
 
-
 def main():
     # Parse the arguments
     model_args, data_args, training_args = begin.parse_hf_arguments()
@@ -21,6 +20,8 @@ def main():
     logger = begin.setup_logging(__name__, training_args.log_level)
 
     REMOVE_STEREO=True
+    FIX_CXSMILES=True
+
     max_eval_samples = 1000
     display_eval_samples = True
     max_display_eval_samples = 100
@@ -148,6 +149,7 @@ def main():
         markush_tokenizer_training=markush_tokenizer_training,
         cxsmiles_tokenizer_training=cxsmiles_tokenizer_training,
         remove_stereo=REMOVE_STEREO,
+        fix_smiles=FIX_CXSMILES,
     )
     print(metrics)
 

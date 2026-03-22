@@ -300,59 +300,15 @@ class CurriculumTrainer(Trainer):
                 }
             )
 
-    def compute_loss(self, model, inputs, return_outputs=False):
+    
+    def compute_loss(self, model, inputs, return_outputs=False, verbose=False):
+        
         if self.loss_fct == "CE":
             loss, outputs = super().compute_loss(model, inputs, return_outputs=True)
-            return (loss, outputs) if return_outputs else loss
-
+            logits = outputs.get("logits", None)
         else:
-            logits = model(**inputs).logits
-            labels = inputs.get("labels").to(logits.device)
-
-            last_true_label_index = (labels == 1).nonzero(as_tuple=False).max()
-
-            ce_loss = 0  # Cross Entropy loss
-            loc_loss = 0  # Location token loss
-
-            # Mask for elements if <loc_{idx}> in range [33000, 32500] inclusive
-            max_logits_indices = torch.argmax(logits, dim=2)
-            mask_loc = ((labels >= 32500) & (labels <= 33000)) & (
-                (max_logits_indices >= 32500) & (max_logits_indices <= 33000)
-            )
-
-            # Validation for when some tokens are not locations tokens and when boxes are rotated
-            for idx in range(1, last_true_label_index, 5):
-                if (
-                    not torch.all(mask_loc[0, idx : idx + 4])
-                    or (max_logits_indices[0, idx] < max_logits_indices[0, idx + 2])
-                    or (max_logits_indices[0, idx + 1] < max_logits_indices[0, idx + 3])
-                ):
-                    mask_loc[0, idx : idx + 4] = False
-
-            ce_loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
-            ce_loss = ce_loss_fct(
-                logits[~mask_loc].view(-1, logits.size(-1)), labels[~mask_loc].view(-1)
-            )
-
-            # If there are any location tokens in the batch, compute location loss
-            if torch.any(mask_loc):
-                input = (33000 - max_logits_indices[mask_loc]) / 500
-                target = (33000 - labels[mask_loc]) / 500
-
-                if self.loss_fct == "Huber":
-                    loc_loss = F.smooth_l1_loss(input, target)
-                elif self.loss_fct == "MSE":
-                    loc_loss = F.mse_loss(input, target)
-                elif self.loss_fct == "Custom_huber":
-                    loc_loss = losses.custom_huber2(input, target, 2)
-                elif self.loss_fct == "GIOU":
-                    input = torch.reshape(input, (-1, 4))
-                    target = torch.reshape(target, (-1, 4))
-                    loc_loss = generalized_box_iou_loss(input, target, "mean")
-
-            loss = ce_loss + loc_loss
-
-            return (loss, logits) if return_outputs else loss
+            NotImplementedError
+        return (loss, logits) if return_outputs else loss
 
     def evaluation_loop(
         self,
