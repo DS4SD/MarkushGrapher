@@ -25,11 +25,27 @@ from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 from rouge_score import rouge_scorer
 from transformers import logging as transformers_logging
 
+import torchvision.transforms as transforms
+
+from markushgrapher.utils.ocsr.mdkit.abbreviation import Abbreviation, ABBREVIATIONS
 from markushgrapher.utils.ocsr.utils_display import display_eval_sample
-from markushgrapher.utils.ocsr.utils_markush import (canonicalize_markush,
-                                                     get_molecule_from_smiles)
-from markushgrapher.utils.ocsr.utils_postprocessing import \
-    MoleculePostprocessor
+from markushgrapher.utils.ocsr.utils_markush import (
+    canonicalize_markush,
+    get_molecule_from_smiles,
+)
+from markushgrapher.utils.ocsr.utils_postprocessing import MoleculePostprocessor
+
+def fix_cxsmiles(cxsmiles_out, abb):
+    """
+    Expand abbreviations and replace end-of-molecule markers with _AP.
+        "CC|Sg:n:2,1,3:PE:ht|" --> "CC|Sg:n:1,2,3:PE:ht|" -->
+        "*C(=O)O.*Cl.C1CC(C2COC2)N1 |m:4:10.11.12.9,m:0:8.7.6.13|"
+    """
+    if cxsmiles_out:
+        cxsmiles_out = abb.expand(cxsmiles_out)
+        cxsmiles_out = cxsmiles_out.replace("<unk>eom>", "_AP")
+        cxsmiles_out = cxsmiles_out.replace("<eom>", "_AP")
+    return cxsmiles_out
 
 
 def get_smiles_metrics(
@@ -57,11 +73,12 @@ def get_smiles_metrics(
     markush_tokenizer_training=None,
     cxsmiles_tokenizer_training=None,
     metrics_prefix="",
+    remove_stereo=True,
 ):
 
-    if markush_tokenizer_training == None:
+    if markush_tokenizer_training is None:
         markush_tokenizer_training = markush_tokenizer
-    if cxsmiles_tokenizer_training == None:
+    if cxsmiles_tokenizer_training is None:
         cxsmiles_tokenizer_training = cxsmiles_tokenizer
 
     metrics = {}
@@ -96,14 +113,27 @@ def get_smiles_metrics(
         ) as f:
             predicted_smiles_opt_list = pickle.load(f)
     else:
-        if not (os.path.exists(display_samples_output_dir)):
-            os.mkdir(display_samples_output_dir)
+        if not os.path.exists(display_samples_output_dir):
+            os.makedirs(display_samples_output_dir, exist_ok=True)
+            print(f"Directory created: {display_samples_output_dir}")
+
+        # Load Abbrev file (needed for fix_smiles function)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        abb_file = os.path.join(current_dir, "mdkit", "mappings", "abbreviations.json")
+        with open(abb_file, "r") as fid:
+            abbs = json.load(fid)
+
+        abb = Abbreviation(abbs)
 
         print("--- Starting auto-regressive evaluation ---")
+        hf_dataset = dataset.get_dataset()
         for idx in tqdm(range(min(len(dataset), max_eval_samples))):
+            print(f"dataset: {dataset}")
+            print(f"len dataset: {len(dataset)}")
+            sample_id = str(hf_dataset[idx]["id"])
             encoding = dataset.__getitem__(int(idx))
 
-            if selected_indices and not (idx in selected_indices):
+            if selected_indices and idx not in selected_indices:
                 continue
 
             # Process and batch inputs
@@ -133,9 +163,7 @@ def get_smiles_metrics(
                 del encoding["decoder_attention_mask"]
                 del encoding["image"]
 
-            input_text = tokenizer.decode(encoding["input_ids"][0])
-            if verbose:
-                print(f"input_text: {input_text}")
+            input_text = tokenizer.decode(encoding["input_ids"][0])  # Note: No batching
 
             if config["udop_tokenizer_only"]:
                 label_text = tokenizer.decode(encoding["labels"][0])
@@ -144,13 +172,11 @@ def get_smiles_metrics(
                     .replace("! [ [ 0, 0 ] ]", "")
                     .replace(" ", "")
                 )
-                print("GT:", label_text)
             else:
                 label_text = markush_tokenizer.decode_plus_decode_other_tokens(
-                    encoding["labels"][0]
+                    encoding["labels"][0], verbose=False
                 )
-            if verbose:
-                print(f"label_text: {label_text}")
+
             if config["name"] == "ocsr":
                 gt_smiles = (
                     label_text.replace("<smi>", "")
@@ -166,17 +192,9 @@ def get_smiles_metrics(
                     .replace("</s>", "")
                     .replace(" ", "")
                 )
-                if verbose:
-                    print(f"gt_smiles_opt: {gt_smiles_opt}")
                 try:
                     gt_smiles = cxsmiles_tokenizer.convert_opt_to_out(gt_smiles_opt)
-                    if verbose:
-                        print(f"gt_smiles: {gt_smiles}")
                 except Exception as e:
-                    if verbose:
-                        print(
-                            f"Error {e} in cxsmiles_tokenizer.convert_opt_to_out for {gt_smiles_opt}"
-                        )
                     gt_smiles = None
             if config["name"] == "mdu":
                 try:
@@ -194,38 +212,41 @@ def get_smiles_metrics(
                         .replace("</s>", "")
                         .replace(" ", "")
                     )
-                except:
+                except Exception as e:
+                    print(f"Exception: {e}")
                     gt_smiles_opt = None
                 gt_stable = markush_tokenizer.get_stable(label_text)
-                print(gt_smiles_opt)
-                gt_smiles = cxsmiles_tokenizer.convert_opt_to_out(gt_smiles_opt)
-                if verbose:
-                    print(f"gt_smiles: {gt_smiles}")
-                if verbose:
-                    print(f"gt_smiles_opt: {gt_smiles_opt}")
                 try:
                     gt_smiles = cxsmiles_tokenizer.convert_opt_to_out(gt_smiles_opt)
-                    if verbose:
-                        print(f"gt_smiles: {gt_smiles}")
                 except Exception as e:
-                    if verbose:
-                        print(
-                            f"Error {e} in cxsmiles_tokenizer.convert_opt_to_out for {gt_smiles_opt}"
-                        )
                     gt_smiles = None
 
-            if (gt_smiles != None) and (Chem.MolFromSmiles(gt_smiles) == None):
+            if gt_smiles is not None and Chem.MolFromSmiles(gt_smiles) is None:
                 print(f"GT smiles can not be read: {gt_smiles}")
                 # If the ground-truth SMILES is invalid, replace it with None
                 predicted_smiles_list.append(None)
                 gt_smiles_list.append(None)
-                if (config["name"] == "ocxsr") or (config["name"] == "mdu"):
+                if config["name"] in ("ocxsr", "mdu"):
                     predicted_smiles_opt_list.append(None)
                     gt_smiles_opt_list.append(None)
                 if config["name"] == "mdu":
                     predicted_stable_list.append(None)
                     gt_stable_list.append(None)
                 continue
+
+            # Fix gt_smiles (expand, replace eom etc.)
+            dataset_name = os.path.basename(config["dataset_path"])
+            print(f"dataset_name: {dataset_name}")
+            if dataset_name in ["molscribe_uspto_mol_100", "USPTO-fixed-chemocr-v4-2", "JPO-fixed-chemocr-v4-2","USPTO-fixed-chemocr-v4-2-crop","UOB-fixed-chemocr-v4-2-crop", "JPO-fixed-chemocr-v4-2-crop", "molparser-test-markush-10k-converted-without-debug-image-scale-1.0-chemocr-v4-2", "molparser-test-simple-10k-converted-without-debug-image-scale-1.0-chemocr-v4-2"] or metrics_prefix in ["uspto_clean_", "wildmol_", "wildmol_m_", "wildmol_"] or metrics_prefix in ["mdu_uspto_clean", "mdu_wildmol", "mdu_wildmol_m", "mdu_wildmol"] or metrics_prefix in ["mdu_uspto_clean_", "mdu_wildmol_", "mdu_wildmol_m_", "mdu_wildmol_"]:
+                print(f"Fix the cxsmiles")
+                print(f"gt_smiles (before fixing): {gt_smiles}")
+                gt_smiles = fix_cxsmiles(gt_smiles, abb)
+                print(f"fixed_gt_smiles: {gt_smiles}")
+
+            else:
+                print(f"Didn't fix the cxsmiles")
+                print(f"dataset_name: {dataset_name}")
+                print(f"metrics_prefix: {metrics_prefix}")
 
             gt_smiles_list.append(gt_smiles)
             if (config["name"] == "ocxsr") or (config["name"] == "mdu"):
@@ -239,12 +260,13 @@ def get_smiles_metrics(
                 )  # Distributed training
             else:
                 with warnings.catch_warnings():
+                    # Important note: generate() calls encoder once (via model.get_encoder()), then calls the decoder per token.
                     warnings.simplefilter("ignore", FutureWarning)
                     transformers_logging.set_verbosity_error()
                     if model_args.beam_search:
                         predicted_ids = model.generate(
                             **encoding, num_beams=5, max_length=512
-                        )  
+                        )
                     else:
                         predicted_ids = model.generate(
                             **encoding, num_beams=1, max_length=512
@@ -267,6 +289,7 @@ def get_smiles_metrics(
                     )
                 )
             if verbose:
+                print(f"predicted_ids: {predicted_ids}")
                 print(f"predicted_text: {predicted_text}")
             if config["name"] == "ocsr":
                 predicted_smiles = (
@@ -312,7 +335,8 @@ def get_smiles_metrics(
                         .replace("</s>", "")
                         .replace(" ", "")
                     )
-                except:
+                except Exception as e:
+                    print(f"Exception: {e}")
                     predicted_smiles_opt = None
 
                 predicted_stable = markush_tokenizer_training.get_stable(predicted_text)
@@ -321,7 +345,6 @@ def get_smiles_metrics(
 
                 if verbose:
                     print(f"predicted_smiles_opt: {predicted_smiles_opt}")
-
                 try:
                     predicted_smiles = cxsmiles_tokenizer_training.convert_opt_to_out(
                         predicted_smiles_opt
@@ -329,40 +352,48 @@ def get_smiles_metrics(
                     if verbose:
                         print(f"predicted_smiles: {predicted_smiles}")
                 except Exception as e:
-                    if verbose:
-                        print(
-                            f"Error {e} in convert_opt_to_out() for {predicted_smiles_opt}"
-                        )
+                    print(f"Error {e} in convert_opt_to_out() for {predicted_smiles_opt}")
                     predicted_smiles = None
+
+                if verbose:
+                    print(f"predicted_smiles: {predicted_smiles}")
+
+                # Fix the predicted SMILES
+                if dataset_name in ["molscribe_uspto_mol_100", "USPTO-fixed-chemocr-v4-2", "JPO-fixed-chemocr-v4-2","USPTO-fixed-chemocr-v4-2-crop", "UOB-fixed-chemocr-v4-2-crop", "JPO-fixed-chemocr-v4-2-crop", "molparser-test-markush-10k-converted-without-debug-image-scale-1.0-chemocr-v4-2", "molparser-test-simple-10k-converted-without-debug-image-scale-1.0-chemocr-v4-2"] or metrics_prefix in ["uspto_clean_", "wildmol_", "wildmol_m_", "wildmol_"] or metrics_prefix in ["mdu_uspto_clean", "mdu_wildmol", "mdu_wildmol_m", "mdu_wildmol"] or metrics_prefix in ["mdu_uspto_clean_", "mdu_wildmol_", "mdu_wildmol_m_", "mdu_wildmol_"]:
+                    predicted_smiles = fix_cxsmiles(predicted_smiles, abb)
+                    if verbose:
+                        print(f"fixed_predicted_smiles: {predicted_smiles}")
 
             # Display debug examples (incorrect gt are not displayed)
             if display_eval_samples and (idx < max_display_eval_samples):
-                display_eval_sample(
-                    image,
-                    encoding["bbox"],
-                    encoding["input_ids"][0],
-                    input_text,
-                    label_text,
-                    predicted_text,
-                    gt_smiles,
-                    gt_smiles_opt,
-                    predicted_smiles,
-                    predicted_smiles_opt,
-                    gt_stable,
-                    predicted_stable,
-                    config,
-                    output_path=f"{display_samples_output_dir}/{idx}.png",
-                    tokenizer=tokenizer,
-                    display_errors=display_errors,
-                    display_markush_evaluation=display_markush_evaluation,
-                )
+                try:
+                    display_eval_sample(
+                        image,
+                        encoding["bbox"],
+                        encoding["input_ids"][0],
+                        input_text,
+                        label_text,
+                        predicted_text,
+                        gt_smiles,
+                        gt_smiles_opt,
+                        predicted_smiles,
+                        predicted_smiles_opt,
+                        gt_stable,
+                        predicted_stable,
+                        config,
+                        output_path=f"{display_samples_output_dir}/{sample_id}.png",
+                        tokenizer=tokenizer,
+                        display_errors=display_errors,
+                        display_markush_evaluation=display_markush_evaluation,
+                    )
+                except Exception as e:
+                    print(f"[WARNING] Failed to display sample {idx}: {e}")
 
-            if (predicted_smiles != None) and (
-                Chem.MolFromSmiles(predicted_smiles) == None
-            ):
+
+            if predicted_smiles is not None and Chem.MolFromSmiles(predicted_smiles) is None:
                 # If the predicted SMILES is invalid, replace it with None
                 predicted_smiles_list.append(None)
-                if (config["name"] == "ocxsr") or (config["name"] == "mdu"):
+                if config["name"] in ("ocxsr", "mdu"):
                     predicted_smiles_opt_list.append(None)
                 continue
 
@@ -386,7 +417,7 @@ def get_smiles_metrics(
         )
         print(
             "Number of samples for autoregressive evaluation:",
-            len([s for s in gt_smiles_list if s != None]),
+            len([s for s in gt_smiles_list if s is not None]),
         )
         metrics[metrics_prefix + "ar_valid"] = scores_ar["valid"]
         metrics[metrics_prefix + "ar_tanimoto"] = scores_ar["tanimoto"]
@@ -404,7 +435,7 @@ def get_smiles_metrics(
         )
         print(
             "Number of samples for autoregressive evaluation:",
-            len([s for s in gt_smiles_list if s != None]),
+            len([s for s in gt_smiles_list if s is not None]),
         )
         metrics[metrics_prefix + "ar_valid"] = scores_ar["valid"]
         metrics[metrics_prefix + "ar_tanimoto"] = scores_ar["tanimoto"]
@@ -417,16 +448,17 @@ def get_smiles_metrics(
         metrics[metrics_prefix + "ar_sg_size"] = scores_ar["sg_size"]
         metrics[metrics_prefix + "ar_inchi_equality"] = scores_ar["inchi_equality"]
         metrics[metrics_prefix + "ar_cxsmi_equality"] = scores_ar["cxsmi_equality"]
+        metrics[metrics_prefix + "ar_num_fragments_equal"] = scores_ar["num_fragments_equal"]
         metrics[metrics_prefix + "ar_string_equality"] = scores_ar["string_equality"]
 
         number_correct_predictions = sum(
             (
                 pred == gt
                 for pred, gt in zip(predicted_smiles_opt_list, gt_smiles_opt_list)
-                if gt != None
+                if gt is not None
             )
         )
-        number_ground_truths = len([gt for gt in gt_smiles_opt_list if gt != None])
+        number_ground_truths = len([gt for gt in gt_smiles_opt_list if gt is not None])
         if number_ground_truths == 0:
             metrics[metrics_prefix + "cxsmi_ar_string_equality_opt"] = 0
         else:
@@ -436,6 +468,8 @@ def get_smiles_metrics(
 
     if config["name"] == "mdu":
         # Debug
+        print(f"Remove Stereo: {remove_stereo}")
+        print("--------------------------------------------------------")
         print(f"Finishing mdu evaluation with prefix: {metrics_prefix}")
         print(f"Len gt_smiles: {len(gt_smiles_list)}")
         print(f"Len predicted_smiles_list: {len(predicted_smiles_list)}")
@@ -451,8 +485,9 @@ def get_smiles_metrics(
             cxsmiles=True,
             markush=True,
             get_unreduced_scores=False,
+            remove_stereo=remove_stereo,
+            verbose=verbose,
         )
-        metrics[metrics_prefix + "ar_valid"] = scores_ar["valid"]
         metrics[metrics_prefix + "ar_valid"] = scores_ar["valid"]
         metrics[metrics_prefix + "ar_tanimoto"] = scores_ar["tanimoto"]
         metrics[metrics_prefix + "ar_is_in_training"] = scores_ar["is_in_training"]
@@ -464,6 +499,7 @@ def get_smiles_metrics(
         metrics[metrics_prefix + "ar_sg_size"] = scores_ar["sg_size"]
         metrics[metrics_prefix + "ar_inchi_equality"] = scores_ar["inchi_equality"]
         metrics[metrics_prefix + "ar_cxsmi_equality"] = scores_ar["cxsmi_equality"]
+        metrics[metrics_prefix + "ar_num_fragments_equal"] = scores_ar["num_fragments_equal"]
         metrics[metrics_prefix + "ar_string_equality"] = scores_ar["string_equality"]
         metrics[metrics_prefix + "ar_stable_recall"] = scores_ar["stable_recall"]
         metrics[metrics_prefix + "ar_stable_precision"] = scores_ar["stable_precision"]
@@ -476,10 +512,10 @@ def get_smiles_metrics(
             (
                 pred == gt
                 for pred, gt in zip(predicted_smiles_opt_list, gt_smiles_opt_list)
-                if gt != None
+                if gt is not None
             )
         )
-        number_ground_truths = len([gt for gt in gt_smiles_opt_list if gt != None])
+        number_ground_truths = len([gt for gt in gt_smiles_opt_list if gt is not None])
         if number_ground_truths == 0:
             metrics[metrics_prefix + "ar_string_equality_opt"] = 0
         else:
@@ -544,7 +580,7 @@ def get_stable_score(
         # "nitrogen" to "a nitrogen".
         new_predicted_stable = {}
         for label, predicted_substituents in predicted_stable.items():
-            if not (label in gt_stable):
+            if label not in gt_stable:
                 new_predicted_stable[label] = predicted_substituents
                 continue
             new_predicted_substituents = []
@@ -558,7 +594,7 @@ def get_stable_score(
                 normalized_predicted_substituent = predicted_substituent.replace(
                     "a ", ""
                 ).replace(" group", "")
-                if not (normalized_predicted_substituent in normalized_gt_substituents):
+                if normalized_predicted_substituent not in normalized_gt_substituents:
                     new_predicted_substituents.append(predicted_substituent)
                     continue
                 new_predicted_substituents.append(
@@ -587,7 +623,7 @@ def get_stable_score(
     gt_found = []
     perfect_match = []
     for label, gt_substituents in gt_stable.items():
-        if not (label in predicted_stable):
+        if label not in predicted_stable:
             perfect_match.append(False)
             gt_found.append([False] * len(gt_substituents))
             continue
@@ -609,7 +645,7 @@ def get_stable_score(
     for label, predicted_substituents in predicted_stable.items():
         if predicted_substituents == []:
             continue
-        if not (label in gt_stable):
+        if label not in gt_stable:
             predicted_found.append([False] * len(predicted_substituents))
             continue
 
@@ -622,7 +658,7 @@ def get_stable_score(
         predicted_found.append(predicted_found_row)
 
     # Aggregate scores for each sample
-    if all([s == True for s in perfect_match]):
+    if all(s is True for s in perfect_match):
         scores["stable_equality"] = True
     if verbose:
         print(
@@ -656,7 +692,6 @@ def get_stable_score(
     if isinstance(scores["stable_precision"], float) and math.isnan(
         scores["stable_precision"]
     ):
-        # predicted_stable = {}
         scores["stable_precision"] = 0.0
 
     return scores
@@ -685,7 +720,7 @@ def get_molecule_information(cxsmiles):
     m_sections = []
     if len(cxsmiles.split("|")) > 1:
         for section in cxsmiles_tokenizer.parse_sections(cxsmiles.split("|")[1]):
-            if (len(section) >= 1) and not (section[0] == "m"):
+            if len(section) >= 1 and not section.startswith("m:"):
                 continue
             m_section = cxsmiles_tokenizer.parse_m_section(section)
             m_sections.append(
@@ -713,6 +748,7 @@ def get_scores(
     markush=False,
     get_unreduced_scores=True,
     verbose=False,
+    remove_stereo=True,
 ):
     """Get scores: validity, correctness, tanimoto"""
     scores = {}
@@ -754,36 +790,37 @@ def get_scores(
             "r": 0.0,
             "m": 0.0,
             "sg": 0.0,
+            "num_fragments_gt": 0,
+            "num_fragments_pred": 0,
+            "num_fragments_equal": False,
             "cxsmi_equality": False,
             "markush_equality": False,
         }
         molecule_information = get_molecule_information(gt_smiles)
-        if molecule_information["r"] == False:
+        if not molecule_information["r"]:
             default_incorrect_score["r"] = None
-        if molecule_information["m"] == False:
+        if not molecule_information["m"]:
             default_incorrect_score["m"] = None
-        if molecule_information["sg"] == False:
+        if not molecule_information["sg"]:
             default_incorrect_score["sg"] = None
 
         if predicted_smiles is None:
             scores[id] = default_incorrect_score
             continue
-        if not (cxsmiles):
+        if not cxsmiles:
             gt_smiles = Chem.MolToSmiles(gt_molecule)
         else:
             gt_smiles = canonicalize_markush(gt_smiles)
             if verbose:
                 print(f"gt_smiles: {gt_smiles}")
         if gt_smiles is None:
-            print(f"GT molecule is None (after canonicalization): {id, gt_smiles}")
             scores[id] = None
             continue
-
         predicted_molecule = Chem.MolFromSmiles(predicted_smiles, parser_params)
         if predicted_molecule is None:
             scores[id] = default_incorrect_score
             continue
-        if not (cxsmiles) and not (markush):
+        if not cxsmiles and not markush:
             predicted_smiles = Chem.MolToSmiles(predicted_molecule)
         else:
             try:
@@ -800,8 +837,9 @@ def get_scores(
                 scores[id] = compute_markush_prediction_quality(
                     predicted_smiles,
                     gt_smiles,
-                    remove_stereo=True,
+                    remove_stereo=remove_stereo,
                     remove_double_bond_stereo=True,
+                    verbose=verbose,
                 )
             except Exception as e:
                 print(
@@ -814,28 +852,43 @@ def get_scores(
             enumerate(zip(gt_smiles_list, predicted_smiles_list)),
             total=len(gt_smiles_list),
         ):
-            if scores[id] == None:
+            if scores[id] is None:
                 continue
-
-            if gt_stable_list[id] is None:
-                print(f"For id: {id}, gt substituent table is None.")
+            
+            print(f"gt_stable_list: {gt_stable_list}")
+            if gt_stable_list:
+                if gt_stable_list[id] is None:
+                    print(f"For id: {id}, gt substituent table is None.")
+                    if id not in scores:
+                        scores[id] = None
+                    scores[id]["stable_equality"] = None
+                    scores[id]["stable_recall"] = None
+                    scores[id]["stable_precision"] = None
+                    scores[id]["markush_equality"] = None
+                    continue
+            else:
                 if id not in scores:
                     scores[id] = None
                 scores[id]["stable_equality"] = None
                 scores[id]["stable_recall"] = None
                 scores[id]["stable_precision"] = None
                 scores[id]["markush_equality"] = None
-                continue
 
-            stable_scores = get_stable_score(
-                gt_stable_list[id], predicted_stable_list[id]
-            )
-            scores[id]["stable_equality"] = stable_scores["stable_equality"]
-            scores[id]["stable_recall"] = stable_scores["stable_recall"]
-            scores[id]["stable_precision"] = stable_scores["stable_precision"]
-            scores[id]["markush_equality"] = (
-                scores[id]["cxsmi_equality"] and scores[id]["stable_equality"]
-            )
+            if gt_stable_list:
+                stable_scores = get_stable_score(
+                    gt_stable_list[id], predicted_stable_list[id]
+                )
+                scores[id]["stable_equality"] = stable_scores["stable_equality"]
+                scores[id]["stable_recall"] = stable_scores["stable_recall"]
+                scores[id]["stable_precision"] = stable_scores["stable_precision"]
+                scores[id]["markush_equality"] = (
+                    scores[id]["cxsmi_equality"] and scores[id]["stable_equality"]
+                )
+            else:
+                scores[id]["stable_equality"] = []
+                scores[id]["stable_recall"] = []
+                scores[id]["stable_precision"] = []
+                scores[id]["markush_equality"] = []
 
     # Evaluate training set overfitting
     for id, predicted_smiles in enumerate(predicted_smiles_list):
@@ -852,13 +905,13 @@ def get_scores(
         warnings.simplefilter("ignore", RuntimeWarning)
         reduced_scores["tanimoto"] = np.round(
             np.mean(
-                [scores[id]["tanimoto"] for id in scores.keys() if scores[id] != None]
+                [scores[id]["tanimoto"] for id in scores.keys() if scores[id] is not None]
             ),
             3,
         )
         reduced_scores["valid"] = np.round(
             np.mean(
-                [scores[id]["valid"] for id in scores.keys() if scores[id] != None]
+                [scores[id]["valid"] for id in scores.keys() if scores[id] is not None]
             ),
             3,
         )
@@ -867,7 +920,7 @@ def get_scores(
                 [
                     scores[id]["inchi_equality"]
                     for id in scores.keys()
-                    if scores[id] != None
+                    if scores[id] is not None
                 ]
             ),
             3,
@@ -877,7 +930,7 @@ def get_scores(
                 [
                     scores[id]["is_in_training"]
                     for id in scores.keys()
-                    if scores[id] != None
+                    if scores[id] is not None
                 ]
             ),
             3,
@@ -887,13 +940,13 @@ def get_scores(
                 [
                     scores[id]["string_equality"]
                     for id in scores.keys()
-                    if scores[id] != None
+                    if scores[id] is not None
                 ]
             ),
             3,
         )
     reduced_scores["invalid_gt"] = sum(
-        (scores[id] == None) for id in scores.keys()
+        (scores[id] is None) for id in scores.keys()
     ) / len(scores)
     reduced_scores["size"] = len(scores)
 
@@ -905,7 +958,7 @@ def get_scores(
                     [
                         scores[id]["r"]
                         for id in scores.keys()
-                        if (scores[id] != None) and (scores[id]["r"] != None)
+                        if (scores[id] is not None) and (scores[id]["r"] is not None)
                     ]
                 ),
                 3,
@@ -915,7 +968,7 @@ def get_scores(
                     [
                         scores[id]["m"]
                         for id in scores.keys()
-                        if (scores[id] != None) and (scores[id]["m"] != None)
+                        if (scores[id] is not None) and (scores[id]["m"] is not None)
                     ]
                 ),
                 3,
@@ -925,7 +978,7 @@ def get_scores(
                     [
                         scores[id]["sg"]
                         for id in scores.keys()
-                        if (scores[id] != None) and (scores[id]["sg"] != None)
+                        if (scores[id] is not None) and (scores[id]["sg"] is not None)
                     ]
                 ),
                 3,
@@ -934,28 +987,31 @@ def get_scores(
                 [
                     True
                     for id in scores.keys()
-                    if (scores[id] != None) and (scores[id]["r"] != None)
+                    if (scores[id] is not None) and (scores[id]["r"] is not None)
                 ]
             )
             if verbose:
                 for i, k in scores.items():
+                    if scores[i] is None:
+                        print(f"Score {i} is NONE")
+                        continue
                     print("score", i, scores[i])
-                    if scores[i]["m"] == None:
+                    if scores[i]["m"] is None:
                         print("score (m none)", i, scores[i])
-                    if scores[id] == None:
+                    if scores[id] is None:
                         print("score (none)", i, scores[i])
             reduced_scores["m_size"] = len(
                 [
                     True
                     for id in scores.keys()
-                    if (scores[id] != None) and (scores[id]["m"] != None)
+                    if (scores[id] is not None) and (scores[id]["m"] is not None)
                 ]
             )
             reduced_scores["sg_size"] = len(
                 [
                     True
                     for id in scores.keys()
-                    if (scores[id] != None) and (scores[id]["sg"] != None)
+                    if (scores[id] is not None) and (scores[id]["sg"] is not None)
                 ]
             )
             reduced_scores["cxsmi_equality"] = np.round(
@@ -963,7 +1019,17 @@ def get_scores(
                     [
                         scores[id]["cxsmi_equality"]
                         for id in scores.keys()
-                        if scores[id] != None
+                        if scores[id] is not None
+                    ]
+                ),
+                3,
+            )
+            reduced_scores["num_fragments_equal"] = np.round(
+                np.mean(
+                    [
+                        scores[id]["num_fragments_equal"]
+                        for id in scores.keys()
+                        if scores[id] is not None
                     ]
                 ),
                 3,
@@ -973,15 +1039,15 @@ def get_scores(
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             for id in range(len(scores)):
-                if scores[id] == None:
+                if scores[id] is None:
                     continue
             reduced_scores["stable_equality"] = np.round(
                 np.mean(
                     [
                         scores[id]["stable_equality"]
                         for id in scores.keys()
-                        if (scores[id] != None)
-                        and (scores[id]["stable_equality"] != None)
+                        if (scores[id] is not None)
+                        and (scores[id]["stable_equality"] is not None)
                     ]
                 ),
                 3,
@@ -991,8 +1057,8 @@ def get_scores(
                     [
                         scores[id]["stable_recall"]
                         for id in scores.keys()
-                        if (scores[id] != None)
-                        and (scores[id]["stable_recall"] != None)
+                        if (scores[id] is not None)
+                        and (scores[id]["stable_recall"] is not None)
                     ]
                 ),
                 3,
@@ -1002,8 +1068,8 @@ def get_scores(
                     [
                         scores[id]["stable_precision"]
                         for id in scores.keys()
-                        if (scores[id] != None)
-                        and (scores[id]["stable_precision"] != None)
+                        if (scores[id] is not None)
+                        and (scores[id]["stable_precision"] is not None)
                     ]
                 ),
                 3,
@@ -1013,8 +1079,8 @@ def get_scores(
                     [
                         scores[id]["markush_equality"]
                         for id in scores.keys()
-                        if (scores[id] != None)
-                        and (scores[id]["markush_equality"] != None)
+                        if (scores[id] is not None)
+                        and (scores[id]["markush_equality"] is not None)
                     ]
                 ),
                 3,
@@ -1054,9 +1120,6 @@ def compute_molecule_prediction_quality(
         "inchi_equality": False,
         "string_equality": False,
     }
-    # print("predicted_mol input", predicted_smiles)
-    # print("gt_mol input", gt_smiles)
-
     if predicted_smiles is None or (
         isinstance(predicted_smiles, float) and math.isnan(predicted_smiles)
     ):
@@ -1069,7 +1132,7 @@ def compute_molecule_prediction_quality(
 
     if compute_nlp_metrics:
         import Levenshtein
-        
+
         # Levenshtein distance
         levenshtein = Levenshtein.distance(predicted_smiles, gt_smiles)
         scores["levenshtein"] = levenshtein
@@ -1098,8 +1161,6 @@ def compute_molecule_prediction_quality(
 
     # Remove hydrogens (They are only useful for stereo-chemistry)
     if remove_stereo:
-        # print("predicted_mol", Chem.MolToSmiles(predicted_molecule))
-        # print("gt_mol", Chem.MolToSmiles(gt_molecule))
         predicted_molecule = Chem.RemoveHs(predicted_molecule)
         gt_molecule = Chem.RemoveHs(gt_molecule)
 
@@ -1121,10 +1182,11 @@ def compute_molecule_prediction_quality(
     scores["tanimoto1"] = scores["tanimoto"] == 1
 
     # Inchi equality
-    if remove_stereo:
+    # Use /SNon to ignore stereo in InChI when remove_stereo or remove_double_bond_stereo is set
+    if remove_stereo or remove_double_bond_stereo:
         gt_inchi, predicted_inchi = MolToInchi(
-            predicted_molecule, options="/SNon"
-        ), MolToInchi(gt_molecule, options="/SNon")
+            gt_molecule, options="/SNon"
+        ), MolToInchi(predicted_molecule, options="/SNon")
     else:
         gt_inchi, predicted_inchi = MolToInchi(gt_molecule), MolToInchi(
             predicted_molecule
@@ -1298,6 +1360,9 @@ def compute_markush_prediction_quality(
         "r": 0,
         "m": 0,
         "sg": 0,
+        "num_fragments_gt": 0,
+        "num_fragments_pred": 0,
+        "num_fragments_equal": False,
         "cxsmi_equality": False,
     }
     scores["string_equality"] = predicted_smiles == gt_smiles
@@ -1309,6 +1374,13 @@ def compute_markush_prediction_quality(
     parser_params.removeHs = False
     predicted_molecule = Chem.MolFromSmiles(predicted_smiles, parser_params)
     gt_molecule = Chem.MolFromSmiles(gt_smiles, parser_params)
+
+    # Count fragments
+    gt_num_fragments = len(Chem.GetMolFrags(gt_molecule))
+    pred_num_fragments = len(Chem.GetMolFrags(predicted_molecule))
+    scores["num_fragments_gt"] = gt_num_fragments
+    scores["num_fragments_pred"] = pred_num_fragments
+    scores["num_fragments_equal"] = (gt_num_fragments == pred_num_fragments)
 
     # Get R groups
     gt_rgroups = {}
@@ -1438,14 +1510,12 @@ def compute_markush_prediction_quality(
             if len(selected_indices) > 1:
                 remove_indices = []
                 for rgroup_idx, rgroup_label in gt_rgroups.items():
-                    if not (rgroup_idx in gt_fragments_indices[i_gt]):
+                    if rgroup_idx not in gt_fragments_indices[i_gt]:
                         continue
                     for selected_index in selected_indices:
                         matched_rlabel = False
                         for i, atom in enumerate(predicted_molecule.GetAtoms()):
-                            if not (
-                                i in predicted_fragments_indices_current[selected_index]
-                            ):
+                            if i not in predicted_fragments_indices_current[selected_index]:
                                 continue
                             if atom.HasProp("atomLabel"):
                                 if (
@@ -1453,14 +1523,14 @@ def compute_markush_prediction_quality(
                                     == rgroup_label.lower()
                                 ):
                                     matched_rlabel = True
-                        if not (matched_rlabel):
+                        if not matched_rlabel:
                             remove_indices.append(selected_index)
                 if verbose:
                     print("remove indices:", remove_indices)
                 selected_indices_new = [
                     selected_index
                     for selected_index in selected_indices
-                    if not (selected_index in remove_indices)
+                    if selected_index not in remove_indices
                 ]
 
             # Fallback option, select the smallest fragment
@@ -1507,7 +1577,7 @@ def compute_markush_prediction_quality(
                 predicted_fragment_smiles,
             )
 
-        if Chem.MolFromSmiles(gt_fragment_smiles) == None:
+        if Chem.MolFromSmiles(gt_fragment_smiles) is None:
             print(
                 f"gt_fragment_molecule is 'None' in compute_markush_prediction_quality() for: predicted_smiles: {predicted_smiles}, gt_smiles: {gt_smiles}"
             )
@@ -1548,17 +1618,16 @@ def compute_markush_prediction_quality(
             predicted_fragments_current = [
                 f
                 for i, f in enumerate(predicted_fragments_current)
-                if (i != selected_index)
+                if i != selected_index
             ]
             predicted_fragments_indices_current = [
                 f
                 for i, f in enumerate(predicted_fragments_indices_current)
-                if (i != selected_index)
+                if i != selected_index
             ]
 
     if verbose:
         print("fragments_indices_mapping:", fragments_indices_mapping)
-    # Reduce backbone scores
     if scores["backbone_fragments_tanimoto"] == []:
         scores["backbone_fragments_tanimoto_reduced"] = 0.0
     else:
@@ -1566,10 +1635,10 @@ def compute_markush_prediction_quality(
             np.mean(scores["backbone_fragments_tanimoto"]), 3
         )
     scores["backbone_fragments_tanimoto1_reduced"] = all(
-        s == True for s in scores["backbone_fragments_tanimoto1"]
+        scores["backbone_fragments_tanimoto1"]
     )
     scores["backbone_fragments_inchi_equality_reduced"] = all(
-        s == True for s in scores["backbone_fragments_inchi_equality"]
+        scores["backbone_fragments_inchi_equality"]
     )
 
     scores["tanimoto"] = np.round(
@@ -1582,13 +1651,11 @@ def compute_markush_prediction_quality(
         3,
     )
     scores["tanimoto1"] = all(
-        s == True
-        for s in [scores["backbone_fragments_tanimoto1_reduced"]]
+        [scores["backbone_fragments_tanimoto1_reduced"]]
         + [scores["backbone_core_tanimoto1"]]
     )
     scores["inchi_equality"] = all(
-        s == True
-        for s in [scores["backbone_fragments_inchi_equality_reduced"]]
+        [scores["backbone_fragments_inchi_equality_reduced"]]
         + [scores["backbone_core_inchi_equality"]]
     )
 
@@ -1642,20 +1709,20 @@ def compute_markush_prediction_quality(
             # Filter matches out of the fragment
             remove_indices = []
             for i, m in enumerate(predicted_matches):
-                if not (all(i in predicted_fragments_indices for i in m)):
+                if not all(i in predicted_fragments_indices for i in m):
                     remove_indices.append(i)
             predicted_matches = [
-                m for i, m in enumerate(predicted_matches) if not (i in remove_indices)
+                m for i, m in enumerate(predicted_matches) if i not in remove_indices
             ]
             if verbose:
                 print("filtered predicted_matches:", predicted_matches)
 
             remove_indices = []
             for i, m in enumerate(gt_matches):
-                if not (all(i_m in gt_fragments_indices[i_gt] for i_m in m)):  # lum
+                if not all(i_m in gt_fragments_indices[i_gt] for i_m in m):  # lum
                     remove_indices.append(i)
             gt_matches = [
-                m for i, m in enumerate(gt_matches) if not (i in remove_indices)
+                m for i, m in enumerate(gt_matches) if i not in remove_indices
             ]
             if verbose:
                 print("filtered gt_matches:", gt_matches)
@@ -1664,7 +1731,7 @@ def compute_markush_prediction_quality(
             for gt_match in gt_matches:
                 for predicted_match in predicted_matches:
                     for m_i_pred, m_i_gt in zip(predicted_match, gt_match):
-                        if not (m_i_pred in gt_to_pred_indices_mapping[m_i_gt]):
+                        if m_i_pred not in gt_to_pred_indices_mapping[m_i_gt]:
                             gt_to_pred_indices_mapping[m_i_gt].append(m_i_pred)
     if verbose:
         print("gt_to_pred_indices_mapping:")
@@ -1672,6 +1739,7 @@ def compute_markush_prediction_quality(
 
     if gt_rgroups == {}:
         scores["r_labels"] = None
+
     if verbose:
         print("gt_rgroups:", gt_rgroups)
 
@@ -1702,7 +1770,7 @@ def compute_markush_prediction_quality(
     m_sections_gt = []
     if len(gt_smiles.split("|")) > 1:
         for section in cxsmiles_tokenizer.parse_sections(gt_smiles.split("|")[1]):
-            if (len(section) >= 1) and not (section[0] == "m"):
+            if len(section) >= 1 and not section.startswith("m:"):
                 continue
             m_section = cxsmiles_tokenizer.parse_m_section(section)
             m_sections_gt.append(
@@ -1723,7 +1791,7 @@ def compute_markush_prediction_quality(
         for section in cxsmiles_tokenizer.parse_sections(
             predicted_smiles.split("|")[1]
         ):
-            if (len(section) >= 1) and not (section[0] == "m"):
+            if len(section) >= 1 and not section.startswith("m:"):
                 continue
             m_section = cxsmiles_tokenizer.parse_m_section(section)
             m_sections_predicted.append(
@@ -1751,7 +1819,7 @@ def compute_markush_prediction_quality(
             for ring_atom in m_section_gt["ring_atoms"]:
                 found = False
                 matched_indices = []
-                if not (ring_atom in gt_to_pred_indices_mapping_m):
+                if ring_atom not in gt_to_pred_indices_mapping_m:
                     continue
                 for i in gt_to_pred_indices_mapping_m[ring_atom]:
                     if i in m_section_predicted["ring_atoms"]:
@@ -1790,45 +1858,60 @@ def compute_markush_prediction_quality(
         force_incorrect = False
         gt_mapped_indices = []
         for i in gt_sgroup.GetAtoms():
-            if not (i in gt_to_pred_indices_mapping_sg):
+            if i not in gt_to_pred_indices_mapping_sg:
                 force_incorrect = True
             gt_mapped_indices.extend(gt_to_pred_indices_mapping_sg[i])
         correct = False
         if verbose:
             print(f"gt_mapped_indices: {gt_mapped_indices}")
-        if not (force_incorrect):
+        if not force_incorrect:
             for pred_sgroup in predicted_sgroups:
-                # if all(i in gt_mapped_indices for i in pred_sgroup.GetAtoms()) and \
-                #     (pred_sgroup.GetProp("LABEL") == gt_sgroup.GetProp("LABEL")):
-                if (list(gt_mapped_indices) == list(pred_sgroup.GetAtoms())) and (
-                    pred_sgroup.GetProp("LABEL") == gt_sgroup.GetProp("LABEL")
+                pred_atoms = set(pred_sgroup.GetAtoms())
+                gt_atoms = list(gt_sgroup.GetAtoms())
+                pred_label = pred_sgroup.GetProp("LABEL") if pred_sgroup.HasProp("LABEL") else None
+                gt_label = gt_sgroup.GetProp("LABEL") if gt_sgroup.HasProp("LABEL") else None
+                if (
+                    len(pred_atoms) == len(gt_atoms)
+                    and all(
+                        any(p in gt_to_pred_indices_mapping_sg[g] for p in pred_atoms)
+                        for g in gt_atoms
+                    )
+                    and all(
+                        any(p in gt_to_pred_indices_mapping_sg[g] for g in gt_atoms)
+                        for p in pred_atoms
+                    )
+                    and (pred_label == gt_label)
                 ):
                     correct = True
-                    # Consume
-                    gt_to_pred_indices_mapping_m = {
-                        k: [idx for idx in v if not (idx in pred_sgroup.GetAtoms())]
-                        for k, v in gt_to_pred_indices_mapping_m.items()
+                    gt_to_pred_indices_mapping_sg = {
+                        k: [idx for idx in v if idx not in pred_sgroup.GetAtoms()]
+                        for k, v in gt_to_pred_indices_mapping_sg.items()
                     }
                     break
         scores["sg_sections"].append(correct)
 
-    if len(gt_sgroups) == 0:
+    if not gt_sgroups:
         scores["sg_sections"] = None
 
     # Reduce
-    if scores["r_labels"] == None:
+    # R
+    if scores["r_labels"] is None:
         scores["r"] = None
     elif scores["r_labels"] == []:
         scores["r"] = 0.0
     else:
         scores["r"] = np.round(np.mean(scores["r_labels"]), 3)
-    if scores["m_sections"] == None:
+
+    # M Section
+    if scores["m_sections"] is None:
         scores["m"] = None
     elif scores["m_sections"] == []:
         scores["m"] = 0.0
     else:
         scores["m"] = np.round(np.mean(scores["m_sections"]), 3)
-    if scores["sg_sections"] == None:
+
+    # Sg Section
+    if scores["sg_sections"] is None:
         scores["sg"] = None
     elif scores["sg_sections"] == []:
         scores["sg"] = 0.0
@@ -1836,10 +1919,11 @@ def compute_markush_prediction_quality(
         scores["sg"] = np.round(np.mean(scores["sg_sections"]), 3)
 
     if (
-        ((scores["r"] == 1.0) or (scores["r"] == None))
-        and ((scores["m"] == 1.0) or (scores["m"] == None))
-        and ((scores["sg"] == 1.0) or (scores["sg"] == None))
-        and (scores["inchi_equality"] == True)
+        ((scores["r"] == 1.0) or (scores["r"] is None))
+        and ((scores["m"] == 1.0) or (scores["m"] is None))
+        and ((scores["sg"] == 1.0) or (scores["sg"] is None))
+        and scores["inchi_equality"]
+        and scores["num_fragments_equal"]
     ):
         scores["cxsmi_equality"] = True
 

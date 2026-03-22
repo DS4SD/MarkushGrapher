@@ -157,6 +157,12 @@ def display_eval_sample(
         + "\n \n"
         + "Ground-truth: \n"
         + "\n".join(wrap(f"{label_text}", max_character_per_line))
+        + "\n \n"
+        + "Ground-truth smiles: \n"
+        + "\n".join(wrap(f"{gt_smiles}", max_character_per_line))
+        + "\n \n"
+        + "Ground-truth smiles: \n"
+        + "\n".join(wrap(f"{gt_smiles_opt}", max_character_per_line))
         + "\n"
     )
     text = ax2.text(
@@ -205,6 +211,19 @@ def display_eval_sample(
 
     # Display predicted text
     display_label = "\n".join(wrap(f"{predicted_text}", max_character_per_line)) + "\n"
+
+    # Add another string below (e.g., predicted smiles)
+    display_label = (
+        "\n".join(wrap(f"{display_label}", max_character_per_line))
+        + "\n\n"
+        + "Predicted Smiles Out:\n"
+        + "\n".join(wrap(f"{predicted_smiles}", max_character_per_line))
+        + "\n\n"
+        + "Predicted Smiles Opt:\n"
+        + "\n".join(wrap(f"{predicted_smiles_opt}", max_character_per_line))
+        + "\n"
+    )
+
     text = ax4.text(
         0.02,
         0.98,
@@ -312,7 +331,7 @@ def display_eval_sample(
             )
 
             # Display markush evaluation
-            ax6.text(0.02, 0.88, display_scores, transform=ax6.transAxes, color="red")
+            ax6.text(0.02, 0.88, display_scores, transform=ax6.transAxes, color="red", fontsize=26, fontweight="bold")
 
     # Display predicted image
     ax6.imshow(image)

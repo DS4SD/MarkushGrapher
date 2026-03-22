@@ -20,9 +20,10 @@ def main():
     # Get the logger
     logger = begin.setup_logging(__name__, training_args.log_level)
 
-    max_eval_samples = 3
+    REMOVE_STEREO=True
+    max_eval_samples = 1000
     display_eval_samples = True
-    max_display_eval_samples = 300
+    max_display_eval_samples = 100
     display_markush_evaluation = True
     display_errors = True
     verbose = True
@@ -31,12 +32,11 @@ def main():
     overwrite_training_smiles = True
     read_predictions = False
     overwrite_predictions = True
+
     selected_indices = []
     if selected_indices != []:
         max_eval_samples = max(selected_indices) + 1
-    input_encoding_training_dataset = "mdu_3005"  # None, "mdu_3005"
-    # Note: "input_encoding_training_dataset" configures the input encoding/decoding
-    # dataset_config["training_dataset_name"] configures the prediction encoding/decoding
+    input_encoding_training_dataset = "mdu_3005" 
 
     # Log
     if training_args is not None:
@@ -47,7 +47,11 @@ def main():
     # Load model
     device = begin.get_device()
     tokenizer, processors, model = begin.load_markushgrapher(
-        model_args, data_args, training_args, device
+        model_args,
+        data_args,
+        training_args,
+        device,
+        use_pretrained_molscribe=data_args.use_pretrained_molscribe,
     )
 
     # Load tokenizer
@@ -76,7 +80,6 @@ def main():
     dataset_dict = begin.load_dataset(data_args, tokenizer, processors, split)
     dataset_name = "mdu"
     dataset = dataset_dict[dataset_name]
-    # dataset._all_datasets = list(dataset._datasets.values())[0] # MODIFIES EVREYTHING!!
     logger.info(
         f"Dataset '{dataset_name}' max index: {min(len(dataset), max_eval_samples)}"
     )
@@ -144,6 +147,7 @@ def main():
         verbose=verbose,
         markush_tokenizer_training=markush_tokenizer_training,
         cxsmiles_tokenizer_training=cxsmiles_tokenizer_training,
+        remove_stereo=REMOVE_STEREO,
     )
     print(metrics)
 
