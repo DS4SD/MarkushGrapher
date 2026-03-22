@@ -27,13 +27,17 @@ from transformers import logging as transformers_logging
 
 import torchvision.transforms as transforms
 
-from markushgrapher.utils.ocsr.mdkit.abbreviation import Abbreviation, ABBREVIATIONS
+
+from markushgrapher.utils.ocsr.abbreviation import Abbreviation, ABBREVIATIONS
+from markushgenerator.data.abbreviation import Abbreviation as Ma
 from markushgrapher.utils.ocsr.utils_display import display_eval_sample
 from markushgrapher.utils.ocsr.utils_markush import (
     canonicalize_markush,
     get_molecule_from_smiles,
 )
 from markushgrapher.utils.ocsr.utils_postprocessing import MoleculePostprocessor
+from importlib.resources import files
+
 
 def fix_cxsmiles(cxsmiles_out, abb):
     """
@@ -119,8 +123,7 @@ def get_smiles_metrics(
             print(f"Directory created: {display_samples_output_dir}")
 
         # Load Abbrev file (needed for fix_smiles function)
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        abb_file = os.path.join(current_dir, "mdkit", "mappings", "abbreviations.json")
+        abb_file = str(files("markushgenerator").joinpath("data", "abbreviations_2.json"))
         with open(abb_file, "r") as fid:
             abbs = json.load(fid)
 
