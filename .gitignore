@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.python-version
+
+# Environment
+.env
+*.venv/
+venv/
+markushgrapher-env/
+
+# Data & models (downloaded separately)
+data/hf/
+data/evaluation/
+data/predictions/
+data/visualization/
+models/
+external/
+
+# Bundled stock transformers for ChemicalOCR (installed via pip install --target)
+markushgrapher/ocr/_hf_transformers/
+
+# Notebooks
+*.ipynb
