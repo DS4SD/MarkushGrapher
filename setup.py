@@ -33,7 +33,7 @@ setuptools.setup(
         "nltk",
         "rouge_score",
         "SmilesPE",
-        "clearml",
+
         "opencv-python",
         "albumentations==1.4.2",
         "timm==0.4.12",

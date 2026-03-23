@@ -1,12 +1,12 @@
 import logging
 import random
 
-from constants import MAX_BBOX_SIZE
+#from constants import MAX_BBOX_SIZE
 from datasets import load_from_disk
-from datasets_registry.utils import add_random_padding
 from torch.utils.data import Dataset
 
 IGNORE_INDEX = -100
+MAX_BBOX_SIZE = 500
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -85,7 +85,6 @@ class OCRDataset(Dataset):
         sample = self._ds[idx]
 
         image = sample["page_image"].convert("RGB")
-        # image = add_random_padding(image)
 
         ocr_out = sample["ocr"]
 
