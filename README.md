@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="https://huggingface.co/datasets/ds4sd/MarkushGrapher-Datasets"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Datasets-blue" alt="Hugging Face Datasets"></a>
-  <a href="https://huggingface.co/ds4sd/MarkushGrapher"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-orange" alt="Hugging Face Model"></a>
+  <a href="https://huggingface.co/datasets/docling-project/MarkushGrapher-2-Datasets"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Datasets-blue" alt="Hugging Face Datasets"></a>
+  <a href="https://huggingface.co/docling-project/MarkushGrapher-2"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-orange" alt="Hugging Face Model"></a>
   <a href="https://arxiv.org/abs/2503.16096"><img src="https://img.shields.io/badge/arXiv-2503.16096-919191.svg" alt="arXiv"></a>
 </p>
 
@@ -86,23 +86,44 @@ git clone https://github.com/lucas-morin/MolScribe.git ./external/MolScribe
 pip install -e ./external/MolScribe --no-deps
 ```
 
-## Model Weights
-
-Download the MarkushGrapher model from [HuggingFace](https://huggingface.co/ds4sd/MarkushGrapher/):
+5. **(Apple Silicon only)** For fast ChemicalOCR inference on Mac, install [mlx-vlm](https://github.com/Blaizzy/mlx-vlm):
 ```bash
-huggingface-cli download ds4sd/MarkushGrapher --local-dir ./tmp/ --repo-type model && cp -r ./tmp/models . && rm -r ./tmp/
+pip install mlx-vlm
 ```
 
-Download the MolScribe model from [HuggingFace](https://huggingface.co/yujieq/MolScribe/):
+## Model Weights
+
+Download all required models with a single command:
 ```bash
+huggingface-cli download docling-project/MarkushGrapher-2 --local-dir ./models/markushgrapher-2 && \
+huggingface-cli download docling-project/ChemicalOCR --local-dir ./models/chemicalocr && \
 wget https://huggingface.co/yujieq/MolScribe/resolve/main/swin_base_char_aux_1m680k.pth -P ./external/MolScribe/ckpts/
 ```
 
+Or individually:
+
+- **MarkushGrapher 2.0** from [HuggingFace](https://huggingface.co/docling-project/MarkushGrapher-2):
+  ```bash
+  huggingface-cli download docling-project/MarkushGrapher-2 --local-dir ./models/markushgrapher-2
+  ```
+
+- **ChemicalOCR** from [HuggingFace](https://huggingface.co/docling-project/ChemicalOCR):
+  ```bash
+  huggingface-cli download docling-project/ChemicalOCR --local-dir ./models/chemicalocr
+  ```
+
+- **MolScribe** (vision encoder weights) from [HuggingFace](https://huggingface.co/yujieq/MolScribe):
+  ```bash
+  wget https://huggingface.co/yujieq/MolScribe/resolve/main/swin_base_char_aux_1m680k.pth -P ./external/MolScribe/ckpts/
+  ```
+
+> **Apple Silicon:** On first run, the ChemicalOCR model is automatically converted to MLX format (`models/chemicalocr-mlx`). This is a one-time operation that takes ~10 seconds.
+
 ## Datasets
 
-Download the datasets from [HuggingFace](https://huggingface.co/datasets/ds4sd/MarkushGrapher-Datasets):
+Download the datasets from [HuggingFace](https://huggingface.co/datasets/docling-project/MarkushGrapher-2-Datasets):
 ```bash
-huggingface-cli download ds4sd/MarkushGrapher-Datasets --local-dir ./data/datasets/hf --repo-type dataset
+huggingface-cli download docling-project/MarkushGrapher-2-Datasets --local-dir ./data/hf --repo-type dataset
 ```
 
 ### Training Data
@@ -131,11 +152,45 @@ The synthetic datasets are generated using [MarkushGenerator](https://github.com
 
 ## Inference
 
+### End-to-End (Images → CXSMILES)
+
+Place your chemical structure images (`.png`) in a directory and run:
+
 ```bash
-python3.10 -m markushgrapher.eval config/predict.yaml
+bash scripts/inference/inference.sh ./data/images
 ```
 
-Configure the dataset path in `config/datasets/datasets_predict.yaml`. Predictions are visualized in `data/visualization/prediction/`.
+This runs the full pipeline:
+1. Converts images to HuggingFace dataset format
+2. Runs **ChemicalOCR** to extract text labels and bounding boxes
+3. Runs **MarkushGrapher 2.0** to predict CXSMILES and substituent tables
+
+Visualizations are saved to `data/visualization/prediction/`.
+
+The ChemicalOCR backend is selected automatically:
+| Platform | Backend | Speed |
+|---|---|---|
+| NVIDIA GPU | vllm | Fastest (batched) |
+| Apple Silicon | mlx-vlm | ~1.5s per image |
+| CPU | transformers | Slow (fallback) |
+
+### Step by Step
+
+**Step 1:** Convert images to HuggingFace dataset and apply ChemicalOCR:
+```bash
+python3 scripts/dataset/image_dir_to_hf_dataset.py \
+  --image_dir ./data/images \
+  --output_dir ./data/hf/sample-images \
+  --apply_ocr \
+  --ocr_model_path ./models/chemicalocr
+```
+
+**Step 2:** Run MarkushGrapher inference:
+```bash
+python3 -m markushgrapher.eval config/predict.yaml
+```
+
+The dataset path is configured in `config/datasets/datasets_predict.yaml`.
 
 ## Training
 
