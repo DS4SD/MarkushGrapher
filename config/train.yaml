@@ -2,7 +2,9 @@
     task_name: Question Answering, 
 
     # Path config
-    model_name_or_path: ./models/09_00_PM_October_30_2024/checkpoint-82500, 
+    clearml_task_name: "MarkushGrapher-2-training", 
+    model_name_or_path: ./models/markushgrapher-2, 
+
     tokenizer_path: auto,
     output_dir: auto, 
     datasets_config: ./config/datasets/datasets.yaml,
@@ -11,8 +13,19 @@
     max_seq_length: 512,                            
     image_size: 512,
     max_seq_length_decoder: 512,
-    model_type: UdopUnimodel,
-    architecture_variant: molscribe-encoder-5,  
+    model_type: MarkushgrapherUnimodel, 
+    
+    architecture_variant: me-lf-stack-1,
+    eval_benchmarks: ["m2s", "uspto_markush", "ip5_m"], 
+    use_pretrained_molscribe: True,
+
+    # submodule weights
+    save_model_weights_seperately = False,
+    load_submodule_weights = False, 
+
+    freeze_ocsr_encoder: True,
+    freeze_vtl_decoder: False, 
+    freeze_mlp_projector: False, 
 
     # Task config
     do_train: True,
@@ -20,34 +33,34 @@
     do_predict: False,
 
     # Training config
-    num_train_epochs: 10,
-    dataloader_num_workers: 3, 
-    gradient_accumulation_steps: 4, 
+    num_train_epochs: 2,
+    dataloader_num_workers: 5, 
+    gradient_accumulation_steps: 3,
     per_device_train_batch_size : 3, 
-    per_device_eval_batch_size : 3, 
+    per_device_eval_batch_size : 5, 
     overwrite_output_dir: True,
     learning_rate: 5.0e-4, 
-    lr_scheduler_type: linear, 
-    warmup_steps: 100, 
+    lr_scheduler_type: inverse_sqrt, 
+    warmup_steps: 1000, 
     weight_decay: 0.001, 
     evaluation_strategy: steps,
-    max_steps: 500000, 
-    eval_steps: 1500,
+    max_steps: 50000, 
+    eval_steps: 1000, 
     logging_steps: 50,
     prediction_loss_only: True,
     label_names: ["labels"],
     save_strategy: steps,
     load_best_model_at_end: True,
-    save_steps: 1500,
-    save_total_limit: 3,
-    metric_for_best_model: mdu_lum_test_ar_cxsmi_equality, 
+    save_steps: 1000,
+    save_total_limit: 10, 
+    metric_for_best_model: mdu_ip5_m_ar_cxsmi_equality, 
     greater_is_better: True,                   
-    report_to: 'clearml',
+    report_to: 'none',
     log_level: "info",
     unit: word, 
     deepspeed: False,
     fp16: False,
-    bf16: True, # True, False
+    bf16: True, 
 
     # Learning config
     curriculum: False,                
@@ -59,5 +72,5 @@
     loss_fct: CE, 
 
     # Evaluation config
-    max_eval_samples: 125, 
+    max_eval_samples: 100, #125
 }

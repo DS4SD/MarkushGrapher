@@ -1,6 +1,5 @@
 {
-    # Path config
-    model_name_or_path: ./models/09_00_PM_October_30_2024/checkpoint-82500, 
+    model_name_or_path: ./models/markushgrapher-2, 
     tokenizer_path: auto,
     output_dir: auto,   
     datasets_config: ./config/datasets/datasets_predict.yaml,
@@ -10,9 +9,15 @@
     image_size: 512,
     max_seq_length_decoder: 512,
     model_type: UdopUnimodel, 
-    architecture_variant: molscribe-encoder-5,
+    architecture_variant:  me-lf-stack-1,
     beam_search: True,
-    normalize_bbox: False,
+    normalize_bbox: True, 
+
+    # model weights
+    use_pretrained_molscribe: True, 
+    freeze_ocsr_encoder: True,
+    freeze_vtl_decoder: False, 
+    freeze_mlp_projector: False, 
 
     # Test config
     do_train: False,
@@ -23,6 +28,6 @@
     viz_out_dir: auto,
     prediction_loss_only: True,
     label_names: ["labels"],      
-    unit: word, # word, token
+    unit: word, 
     apply_ocr: False,
 }

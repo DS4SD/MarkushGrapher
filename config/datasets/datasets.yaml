@@ -4,7 +4,7 @@
         class_name: "MDU_Dataset",
         name: "mdu",
         type: "supervised",
-        dataset_path: "./data/hf/markushgrapher-synthetic-training", 
+        dataset_path: "./data/hf/uspto-mol-m-54k",
         encode_position: False,        
         grounded_smiles: False,
         encode_index: True, 
@@ -12,8 +12,8 @@
         condense_labels: True,
         augment_test: False,
         udop_tokenizer_only: False,
-        normalize_bbox: False,
-        training_dataset_name: "mdu_3008_aug",
+        normalize_bbox: True,  # False
+        training_dataset_name: "mdu_3008", # mdu_3008_aug
         mask_ratio: 1,
         task: "Question Answering",
         splits: ["train", "test"],

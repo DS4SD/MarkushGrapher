@@ -4,7 +4,7 @@
         class_name: "MDU_Dataset",
         name: "mdu",
         type: "supervised",
-        dataset_path: "./data/hf/uspto-markush", 
+        dataset_path: "./data/hf/m2s",
         encode_position: False,
         grounded_smiles: False,
         encode_index: True,
