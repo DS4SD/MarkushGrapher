@@ -101,7 +101,14 @@ def display_eval_sample(
     if display_ocr_cells:
         boxes_image = Image.new("RGBA", image.size, (255, 255, 255, 0))
         draw = ImageDraw.Draw(boxes_image)
-        rescale_factor = image.size[0] / 500
+        # Determine rescale factor based on bbox coordinate range.
+        # If normalize_bbox=True, bboxes are in [0, 1]; otherwise in [0, 500].
+        sample_bbox = encoding_bbox[0][0].tolist() if len(encoding_bbox[0]) > 0 else [0, 0, 0, 0]
+        max_coord = max(max(sample_bbox), 1e-6)
+        if max_coord <= 1.0:
+            rescale_factor = image.size[0]
+        else:
+            rescale_factor = image.size[0] / 500
         font = ImageFont.FreeTypeFont(
             os.path.dirname(__file__) + "/../../../data/fonts/calibri.ttf", size=20
         )

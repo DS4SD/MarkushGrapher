@@ -29,7 +29,7 @@ import torchvision.transforms as transforms
 
 
 from markushgrapher.utils.ocsr.abbreviation import Abbreviation, ABBREVIATIONS
-from markushgenerator.data.abbreviation import Abbreviation as Ma
+
 from markushgrapher.utils.ocsr.utils_display import display_eval_sample
 from markushgrapher.utils.ocsr.utils_markush import (
     canonicalize_markush,
