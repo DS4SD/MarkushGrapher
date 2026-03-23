@@ -16,7 +16,7 @@ MarkushGrapher 2.0 substantially outperforms state-of-the-art models — includi
 
 ## What's New in 2.0
 
-Compared to [MarkushGrapher 1.0](https://arxiv.org/abs/2503.16096), version 2.0 introduces several major improvements:
+Compared to [MarkushGrapher 1.0](https://arxiv.org/abs/2503.16096), version 2.0 introduces several major improvements (the v1 code is available under the [`markushgrapher-v1`](../../tree/markushgrapher-v1) tag):
 
 - **End-to-End Processing** — A dedicated **ChemicalOCR** module extracts text and bounding boxes directly from images, eliminating the need for external OCR annotations.
 - **Two-Phase Training Strategy** — Phase 1 (Adaptation) aligns the projector and decoder to pretrained OCSR features; Phase 2 (Fusion) introduces the VTL encoder for joint multimodal training, improving encoder fusion.
