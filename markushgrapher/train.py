@@ -10,7 +10,10 @@ import warnings
 import evaluate
 import torch
 import transformers
-from clearml import Task
+try:
+    from clearml import Task
+except ImportError:
+    Task = None
 from transformers.trainer_utils import is_main_process
 
 import markushgrapher.core.common.begin as begin
@@ -62,7 +65,9 @@ def main():
 
     log_all_args(model_args, data_args, training_args)
 
-    if training_args.report_to == "clearml" or training_args.report_to == ["clearml"]:
+    use_clearml = Task is not None and training_args.report_to in ("clearml", ["clearml"])
+
+    if use_clearml:
         logger.info("Initializing CLEARML TASK")
         clearml_task = Task.init(
             project_name="MarkushGrapher-ChemOCR",
@@ -97,7 +102,7 @@ def main():
 
     dataset_config = read_yaml_file(data_args.datasets_config)
 
-    if training_args.report_to == "clearml" or training_args.report_to == ["clearml"]:
+    if use_clearml:
         clearml_task.connect(model_args, "Custom model args")
         clearml_task.connect(data_args, "Custom data args")
         clearml_task.connect(training_args, "Custom training args")
@@ -176,22 +181,16 @@ def main():
 
     # Read benchmark dataset
     # uspto-markush - 74 samples
+    data_args_benchmark_m2s = copy.deepcopy(data_args)
+    data_args_benchmark_m2s.datasets_config = (
+        os.path.dirname(__file__)
+        + "/../config/datasets/datasets_on_fly_eval_m2s.yaml"
+    )
+    # uspto-markush - 74 samples
     data_args_benchmark_uspto_markush = copy.deepcopy(data_args)
     data_args_benchmark_uspto_markush.datasets_config = (
         os.path.dirname(__file__)
         + "/../config/datasets/datasets_on_fly_eval_uspto_markush.yaml"
-    )
-    # wildmol-m - 100 samples
-    data_args_benchmark_wildmol_m = copy.deepcopy(data_args)
-    data_args_benchmark_wildmol_m.datasets_config = (
-        os.path.dirname(__file__)
-        + "/../config/datasets/datasets_on_fly_eval_wildmol_m.yaml"
-    )
-    # uspto (clean) - 50 samples
-    data_args_benchmark_uspto = copy.deepcopy(data_args)
-    data_args_benchmark_uspto.datasets_config = (
-        os.path.dirname(__file__)
-        + "/../config/datasets/datasets_on_fly_eval_uspto.yaml"
     )
     # IP5-M - 100 samples
     data_args_benchmark_ip5_m = copy.deepcopy(data_args)
@@ -204,12 +203,8 @@ def main():
         "uspto_markush": begin.load_dataset(
             data_args_benchmark_uspto_markush, tokenizer, processor, "test"
         ),
-        # Note: Wildmol_M is only reasonable if we do fix_smiles (otherwise incorrect, as it evaluates on expanded abbrevs)
-        "wildmol_m": begin.load_dataset(
-            data_args_benchmark_wildmol_m, tokenizer, processor, "test"
-        ),
-        "uspto_clean": begin.load_dataset(
-            data_args_benchmark_uspto, tokenizer, processor, "test"
+        "m2s": begin.load_dataset(
+            data_args_benchmark_m2s, tokenizer, processor, "test"
         ),
         "ip5_m": begin.load_dataset(
             data_args_benchmark_ip5_m, tokenizer, processor, "test"
