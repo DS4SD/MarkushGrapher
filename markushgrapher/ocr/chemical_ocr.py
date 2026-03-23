@@ -17,6 +17,39 @@ def _mlx_available():
     return importlib.util.find_spec("mlx_vlm") is not None
 
 
+def _ensure_stock_transformers():
+    """Install stock transformers + tokenizers into _hf_transformers if missing."""
+    import subprocess
+    import sys
+
+    hf_tf_dir = os.path.join(os.path.dirname(__file__), "_hf_transformers")
+    if not os.path.exists(os.path.join(hf_tf_dir, "transformers")):
+        print("Installing stock transformers for ChemicalOCR (one-time setup)...")
+        os.makedirs(hf_tf_dir, exist_ok=True)
+        subprocess.check_call([
+            sys.executable, "-m", "pip", "install",
+            "--target", hf_tf_dir, "--no-deps",
+            "transformers==4.46.3", "tokenizers==0.22.2",
+        ], stdout=subprocess.DEVNULL)
+        # Patch dependency_versions_check to avoid version conflicts
+        dep_check = os.path.join(hf_tf_dir, "transformers", "dependency_versions_check.py")
+        if os.path.exists(dep_check):
+            with open(dep_check, "w") as f:
+                f.write("def dep_version_check(pkg, hint=None):\n    pass\n")
+        # Patch idefics3 image processor: resize() must pass max_image_size
+        img_proc = os.path.join(hf_tf_dir, "transformers", "models", "idefics3", "image_processing_idefics3.py")
+        if os.path.exists(img_proc):
+            with open(img_proc) as f:
+                content = f.read()
+            old = '            size = get_resize_output_image_size(\n                image, resolution_max_side=size["longest_edge"], input_data_format=input_data_format\n            )'
+            new = '            max_img_size = self.max_image_size.get("longest_edge", 1820) if hasattr(self, "max_image_size") and isinstance(self.max_image_size, dict) else 1820\n            size = get_resize_output_image_size(\n                image, resolution_max_side=size["longest_edge"], max_image_size=max(max_img_size, size["longest_edge"]), input_data_format=input_data_format\n            )'
+            if old in content:
+                with open(img_proc, "w") as f:
+                    f.write(content.replace(old, new))
+        print("Stock transformers installed successfully.")
+    return hf_tf_dir
+
+
 def _load_stock_transformers_model(model_path, device):
     """Load processor and model using stock transformers (not the custom fork).
 
@@ -25,11 +58,9 @@ def _load_stock_transformers_model(model_path, device):
     from markushgrapher/ocr/_hf_transformers/ to load the model, then restores
     the original modules.
     """
-    import os
     import sys
 
-    # Path to the bundled stock transformers
-    hf_tf_dir = os.path.join(os.path.dirname(__file__), "_hf_transformers")
+    hf_tf_dir = _ensure_stock_transformers()
     sys.path.insert(0, hf_tf_dir)
 
     # Remove cached transformers/tokenizers modules so Python picks up the stock version
@@ -69,9 +100,7 @@ def _convert_to_mlx(model_path, mlx_path):
     import subprocess
     import sys
 
-    # Run conversion with stock transformers on PYTHONPATH (the custom fork
-    # doesn't include Idefics3, which mlx_vlm needs for the processor)
-    hf_tf_dir = os.path.join(os.path.dirname(__file__), "_hf_transformers")
+    hf_tf_dir = _ensure_stock_transformers()
     env = os.environ.copy()
     env["PYTHONPATH"] = hf_tf_dir + os.pathsep + env.get("PYTHONPATH", "")
     subprocess.check_call([
@@ -88,10 +117,9 @@ def _load_mlx_model(mlx_path):
     (not the custom fork) to recognize Idefics3Processor. Both mlx_vlm and
     stock transformers are imported fresh inside this function.
     """
-    import os
     import sys
 
-    hf_tf_dir = os.path.join(os.path.dirname(__file__), "_hf_transformers")
+    hf_tf_dir = _ensure_stock_transformers()
     sys.path.insert(0, hf_tf_dir)
 
     # Save and clear transformers/tokenizers modules (keep mlx_vlm out so it
