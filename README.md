@@ -63,6 +63,20 @@ The projected vision embedding (e1) is concatenated with the VTL embedding (e2) 
 
 ## Installation
 
+### Quick Setup
+
+Run the setup script to install everything (dependencies, forks, model weights):
+
+```bash
+bash setup.sh
+source markushgrapher-env/bin/activate
+```
+
+### Manual Setup
+
+<details>
+<summary>Step-by-step instructions</summary>
+
 1. Create a virtual environment:
 ```bash
 python3.10 -m venv markushgrapher-env
@@ -91,33 +105,16 @@ pip install -e ./external/MolScribe --no-deps
 pip install mlx-vlm
 ```
 
-## Model Weights
-
-Download all required models with a single command:
+6. Download model weights:
 ```bash
-huggingface-cli download docling-project/MarkushGrapher-2 --local-dir ./models/markushgrapher-2 && \
-huggingface-cli download docling-project/ChemicalOCR --local-dir ./models/chemicalocr && \
+huggingface-cli download docling-project/MarkushGrapher-2 --local-dir ./models/markushgrapher-2
+huggingface-cli download docling-project/ChemicalOCR --local-dir ./models/chemicalocr
 wget https://huggingface.co/yujieq/MolScribe/resolve/main/swin_base_char_aux_1m680k.pth -P ./external/MolScribe/ckpts/
 ```
 
-Or individually:
+</details>
 
-- **MarkushGrapher 2.0** from [HuggingFace](https://huggingface.co/docling-project/MarkushGrapher-2):
-  ```bash
-  huggingface-cli download docling-project/MarkushGrapher-2 --local-dir ./models/markushgrapher-2
-  ```
-
-- **ChemicalOCR** from [HuggingFace](https://huggingface.co/docling-project/ChemicalOCR):
-  ```bash
-  huggingface-cli download docling-project/ChemicalOCR --local-dir ./models/chemicalocr
-  ```
-
-- **MolScribe** (vision encoder weights) from [HuggingFace](https://huggingface.co/yujieq/MolScribe):
-  ```bash
-  wget https://huggingface.co/yujieq/MolScribe/resolve/main/swin_base_char_aux_1m680k.pth -P ./external/MolScribe/ckpts/
-  ```
-
-> **Apple Silicon:** On first run, the ChemicalOCR model is automatically converted to MLX format (`models/chemicalocr-mlx`). This is a one-time operation that takes ~10 seconds.
+> **Apple Silicon:** On first run, the ChemicalOCR model is automatically converted to MLX format. This is a one-time operation.
 
 ## Datasets
 
