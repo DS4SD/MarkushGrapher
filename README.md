@@ -106,7 +106,7 @@ The ChemicalOCR backend is selected automatically:
 | Apple Silicon | mlx-vlm | ~1.5s per image |
 | CPU | transformers | Slow (fallback) |
 
-> **Note:** ChemicalOCR requires a GPU (NVIDIA CUDA or Apple Silicon) for reliable results. Running on CPU produces mostly incorrect OCR output, which degrades the overall pipeline accuracy.
+> **Note:** ChemicalOCR requires GPU (NVIDIA CUDA) or Apple Silicon (MPS). It does not produce output on CPU.
 
 ### Step by Step
 
