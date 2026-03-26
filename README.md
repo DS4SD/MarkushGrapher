@@ -106,7 +106,7 @@ The ChemicalOCR backend is selected automatically:
 | Apple Silicon | mlx-vlm | ~1.5s per image |
 | CPU | transformers | Slow (fallback) |
 
-> **Note:** ChemicalOCR requires GPU (NVIDIA CUDA) or Apple Silicon (MPS). It does not produce output on CPU.
+> **Note:** ChemicalOCR requires GPU (NVIDIA CUDA) or Apple Silicon (MPS). It does not produce correct output on CPU.
 
 ### Step by Step
 
@@ -174,12 +174,10 @@ huggingface-cli download docling-project/MarkushGrapher-2-Datasets --local-dir .
 
 | Phase | Dataset | Size | Type |
 |---|---|---|---|
-| OCR | Synthetic ChemicalOCR | 235k | Synthetic |
-| OCR | IP5 ChemicalOCR | 7k | Real (manually annotated) |
-| Phase 1 (Adaptation) | MolScribe USPTO | 243k | Real (image-SMILES pairs) |
-| Phase 2 (Fusion) | Synthetic CXSMILES | 235k | Synthetic |
-| Phase 2 (Fusion) | MolParser | 91k | Real (converted to CXSMILES) |
-| Phase 2 (Fusion) | USPTO-MOL-M | 54k | Real (auto-extracted from MOL files) |
+| Phase 1 (Adaptation) | [MolScribe USPTO](https://huggingface.co/yujieq/MolScribe/blob/main/uspto_mol.zip) | 243k | Real (image-SMILES pairs) |
+| Phase 2 (Fusion) | [Synthetic CXSMILES](https://huggingface.co/datasets/docling-project/MarkushGrapher-Datasets/viewer/markushgrapher-synthetic-training) | 235k | Synthetic |
+| Phase 2 (Fusion) | [MolParser](https://huggingface.co/datasets/UniParser/MolParser-7M/viewer/sft_real) | 91k | Real (converted to CXSMILES) |
+| Phase 2 (Fusion) | [USPTO-MOL-M](https://huggingface.co/datasets/docling-project/MarkushGrapher-2-Datasets/viewer/uspto-mol-m-54k) | 54k | Real (auto-extracted from MOL files) |
 
 ### Benchmarks
 
@@ -210,6 +208,7 @@ MarkushGrapher builds on [UDOP](https://arxiv.org/abs/2212.02623) (Vision-Text-L
 
 If you find this repository useful, please consider citing:
 
+**MarkushGrapher-2:**
 ```bibtex
 @inproceedings{strohmeyer2026markushgrapher2,
   title     = {MarkushGrapher-2: End-to-end Multimodal Recognition of Chemical Structures},
@@ -217,7 +216,10 @@ If you find this repository useful, please consider citing:
   booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
   year      = {2026}
 }
+```
 
+**MarkushGrapher:**
+```bibtex
 @inproceedings{Morin_2025,
   title     = {MarkushGrapher: Joint Visual and Textual Recognition of Markush Structures},
   url       = {http://dx.doi.org/10.1109/CVPR52734.2025.01352},
