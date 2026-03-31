@@ -6,7 +6,7 @@
   <a href="https://timstrohmeyer.github.io/MarkushGrapher-2-website/"><img src="https://img.shields.io/badge/Project-Website-blue" alt="Project Website"></a>
   <a href="https://huggingface.co/docling-project/MarkushGrapher-2"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-orange" alt="Hugging Face Model"></a>
   <a href="https://huggingface.co/datasets/docling-project/MarkushGrapher-2-Datasets"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Datasets-blue" alt="Hugging Face Datasets"></a>
-  <a href="https://arxiv.org/abs/2503.16096"><img src="https://img.shields.io/badge/arXiv-2503.16096-919191.svg" alt="arXiv"></a>
+  <a href="https://arxiv.org/abs/2603.28550"><img src="https://img.shields.io/badge/arXiv-2603.28550-919191.svg" alt="arXiv"></a>
 </p>
 
 ---
