@@ -15,7 +15,7 @@
 
 MarkushGrapher 2.0 substantially outperforms state-of-the-art models — including MolParser, MolScribe, GPT-5, and DeepSeek-OCR — on Markush structure recognition benchmarks, while maintaining competitive performance on standard molecular structure recognition (OCSR).
 
-**Resources:** [Model](https://huggingface.co/docling-project/MarkushGrapher-2) | [Datasets](https://huggingface.co/datasets/docling-project/MarkushGrapher-2-Datasets) | [Paper (v2)](https://timstrohmeyer.github.io/MarkushGrapher-2-website/) | [Paper (v1)](https://arxiv.org/abs/2503.16096)
+**Resources:** [Model](https://huggingface.co/docling-project/MarkushGrapher-2) | [Datasets](https://huggingface.co/datasets/docling-project/MarkushGrapher-2-Datasets) | [Paper (v2)](https://arxiv.org/abs/2603.28550) | [Paper (v1)](https://arxiv.org/abs/2503.16096)
 
 ## What's New in 2.0
 
