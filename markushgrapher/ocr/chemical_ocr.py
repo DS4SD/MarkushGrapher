@@ -163,28 +163,38 @@ def _get_device():
 
 
 def parse_ocr_string(ocr_string: str):
-    """Convert predicted string to list of dictionaries."""
-    # Step 1: Remove <ocr> tags and the leading fixed <loc_*> tags
+    """Convert predicted string to list of dictionaries.
+
+    Supports two coordinate formats emitted by different model versions:
+      Legacy: <loc_0><loc_0><loc_500><loc_500>\n<loc_x1><loc_y1><loc_x2><loc_y2>text
+      New:    0>0>500>500>x1>y1>x2>y2>text\nx1>y1>x2>y2>text
+    """
     cleaned = re.sub(r"</?ocr>", "", ocr_string).strip()
-    cleaned = re.sub(r"^<loc_0><loc_0><loc_500><loc_500>", "", cleaned, count=1).strip()
 
-    # Step 2: Split into lines
-    lines = cleaned.splitlines()
-
-    # Step 3: Extract bbox + text from each line
     words = []
     normalized_boxes = []
 
-    for line in lines:
-        # Use raw strings for regex to avoid escape warnings
-        locs = list(map(int, re.findall(r"<loc_(\d+)>", line)))
-        text = re.sub(r"(?:<loc_\d+>){4}", "", line).strip()
-        if len(locs) >= 4 and text:
-            bbox = locs[-4:]
-            bbx_conv = [x / 500 for x in bbox]
-
-            words.append(text)
-            normalized_boxes.append(bbx_conv)
+    if "<loc_" in cleaned:
+        # Legacy <loc_N> format
+        cleaned = re.sub(r"^<loc_0><loc_0><loc_500><loc_500>", "", cleaned, count=1).strip()
+        for line in cleaned.splitlines():
+            locs = list(map(int, re.findall(r"<loc_(\d+)>", line)))
+            text = re.sub(r"(?:<loc_\d+>){4}", "", line).strip()
+            if len(locs) >= 4 and text:
+                bbox = locs[-4:]
+                words.append(text)
+                normalized_boxes.append([x / 500 for x in bbox])
+    else:
+        # New N> format: each line is [page_bbox>]x1>y1>x2>y2>text
+        # Use a greedy prefix to skip the optional leading page bbox (0>0>500>500>)
+        for line in cleaned.splitlines():
+            m = re.match(r'^(?:\d+>)*(\d+)>(\d+)>(\d+)>(\d+)>(.+)$', line.strip())
+            if m:
+                x1, y1, x2, y2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+                text = m.group(5).strip()
+                if text:
+                    words.append(text)
+                    normalized_boxes.append([x1 / 500, y1 / 500, x2 / 500, y2 / 500])
 
     return words, normalized_boxes
 
@@ -441,6 +451,9 @@ class Chemical_OCR:
                 for word, norm_box in zip(words, norm_boxes):
                     ocr_dict = {"bbox": norm_box, "text": word}
                     cells.append(ocr_dict)
+
+                if verbose:
+                    print(f"[OCR] {img_name}: raw={repr(output_text[:200])} -> {len(cells)} cells")
 
                 name_to_cells[img_name] = cells
 

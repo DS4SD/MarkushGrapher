@@ -37,7 +37,6 @@ echo "[3/5] Installing transformers fork and MolScribe..."
 if [ ! -d "external/transformers" ]; then
     git clone --quiet https://github.com/lucas-morin/transformers.git ./external/transformers
 fi
-pip install -e ./external/transformers -q
 
 if [ ! -d "external/MolScribe" ]; then
     git clone --quiet https://github.com/lucas-morin/MolScribe.git ./external/MolScribe
@@ -52,6 +51,16 @@ if python3 -c "import torch; assert torch.backends.mps.is_available()" 2>/dev/nu
 else
     echo "       Not Apple Silicon (or MPS unavailable), skipping mlx-vlm."
 fi
+
+# Pin dependencies that must win over mlx-vlm / other package pulls:
+#   - The custom transformers fork must be active (mlx-vlm pulls stock transformers >= 5.x)
+#   - torch 2.2.0 requires numpy < 2 (numpy 2.x breaks torch.tensor() on numpy dtypes)
+#   - pyonmttok 1.38.x is missing libOpenNMTTokenizer.dylib on macOS; 1.37.1 bundles it
+#   - MolScribe requires OpenNMT-py == 2.2.0 exactly
+echo "       Pinning numpy<2, pyonmttok==1.37.1, OpenNMT-py==2.2.0..."
+pip install "numpy<2" "pyonmttok==1.37.1" "OpenNMT-py==2.2.0" -q
+# Reinstall the transformers fork last so it wins over any stock version pulled above
+pip install -e ./external/transformers -q
 
 # Step 5: Download model weights
 echo "[5/5] Downloading model weights..."

@@ -39,7 +39,7 @@ def apply_ocr(hf_dataset_dir, model_path, output_dir=None):
 
     for split in splits:
         input_path = f"{hf_dataset_dir}/{split}"
-        ocr_model.predict(dataset_dir=input_path, output_dir=output_dir, split=split)
+        ocr_model.predict(dataset_dir=input_path, output_dir=output_dir, split=split, verbose=True)
 
     if overwrite_in_place:
         shutil.rmtree(hf_dataset_dir)

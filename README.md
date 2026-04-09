@@ -29,21 +29,43 @@ Compared to [MarkushGrapher 1.0](https://arxiv.org/abs/2503.16096), version 2.0 
 
 ## Installation
 
-### Quick Setup
+Choose the setup path that matches your hardware:
 
-Run the setup script to install everything (dependencies, forks, model weights):
+| Hardware | Setup script |
+|---|---|
+| NVIDIA GPU (CUDA) | `setup-cuda.sh` |
+| Apple Silicon (MPS) | `setup.sh` |
+| CPU only | `setup.sh` |
+
+### NVIDIA GPU (CUDA)
+
+ChemicalOCR runs via [vllm](https://github.com/vllm-project/vllm) in a dedicated environment. To run this, you require Python 3.10+
+
+```bash
+bash setup-cuda.sh
+```
+
+This creates two virtual environments:
+- `chemicalocr-env` — vllm + stock transformers (fast batched ChemicalOCR on GPU)
+- `markushgrapher-env` — custom transformers fork (MarkushGrapher model inference)
+
+The two environments are needed because vllm requires `tokenizers >= 0.19` while the custom transformers fork requires `tokenizers < 0.14` — these ranges do not overlap.
+
+### Apple Silicon / CPU
 
 ```bash
 bash setup.sh
 source markushgrapher-env/bin/activate
 ```
 
+On Apple Silicon, ChemicalOCR uses [mlx-vlm](https://github.com/Blaizzy/mlx-vlm). On first run the model is automatically converted to MLX format (one-time operation). On CPU, the transformers backend is used as a fallback (very slow).
+
 ### Manual Setup
 
 <details>
 <summary>Step-by-step instructions</summary>
 
-1. Create a virtual environment:
+1. Create a virtual environment (requires Python 3.10):
 ```bash
 python3.10 -m venv markushgrapher-env
 source markushgrapher-env/bin/activate
@@ -80,8 +102,6 @@ wget https://huggingface.co/yujieq/MolScribe/resolve/main/swin_base_char_aux_1m6
 
 </details>
 
-> **Apple Silicon:** On first run, the ChemicalOCR model is automatically converted to MLX format. This is a one-time operation.
-
 ## Inference
 
 ### End-to-End (Images → CXSMILES)
@@ -99,29 +119,48 @@ This runs the full pipeline:
 
 Visualizations are saved to `data/visualization/prediction/`.
 
-The ChemicalOCR backend is selected automatically:
-| Platform | Backend | Speed |
-|---|---|---|
-| NVIDIA GPU | vllm | Fastest (batched) |
-| Apple Silicon | mlx-vlm | ~1.5s per image |
-| CPU | transformers | Slow (fallback) |
+The script selects the Python interpreter and ChemicalOCR backend automatically based on which environments are installed:
 
-> **Note:** ChemicalOCR requires GPU (NVIDIA CUDA) or Apple Silicon (MPS). It does not produce correct output on CPU.
+| Hardware | Setup used | ChemicalOCR backend | Speed |
+|---|---|---|---|
+| NVIDIA GPU | `chemicalocr-env` (from `setup-cuda.sh`) | vllm | Fastest (batched GPU) |
+| Apple Silicon | `markushgrapher-env` (from `setup.sh`) | mlx-vlm | ~1.5s per image |
+| CPU | `markushgrapher-env` (from `setup.sh`) | transformers | Slow (fallback only) |
+
+You can override the interpreter for either stage:
+```bash
+CHEMICALOCR_PYTHON=/path/to/python MARKUSHGRAPHER_PYTHON=/path/to/python \
+  bash scripts/inference/inference.sh ./data/images
+```
+
+> **Note:** ChemicalOCR produces reliable results on NVIDIA GPU (vllm) and Apple Silicon (mlx-vlm). The CPU/transformers fallback is available but slow and not recommended for production use.
 
 ### Step by Step
 
-**Step 1:** Convert images to HuggingFace dataset and apply ChemicalOCR:
+**Step 1:** Convert images to a HuggingFace dataset and apply ChemicalOCR.
+
+- **NVIDIA GPU** (uses `chemicalocr-env` with vllm):
 ```bash
-python3 scripts/dataset/image_dir_to_hf_dataset.py \
+PYTHONPATH=. chemicalocr-env/bin/python scripts/dataset/image_dir_to_hf_dataset.py \
   --image_dir ./data/images \
   --output_dir ./data/hf/sample-images \
   --apply_ocr \
   --ocr_model_path ./models/chemicalocr
 ```
 
-**Step 2:** Run MarkushGrapher inference:
+- **Apple Silicon / CPU** (uses `markushgrapher-env` with mlx-vlm or transformers):
 ```bash
-python3 -m markushgrapher.eval config/predict.yaml
+source markushgrapher-env/bin/activate
+PYTHONPATH=. python scripts/dataset/image_dir_to_hf_dataset.py \
+  --image_dir ./data/images \
+  --output_dir ./data/hf/sample-images \
+  --apply_ocr \
+  --ocr_model_path ./models/chemicalocr
+```
+
+**Step 2:** Run MarkushGrapher inference (always uses `markushgrapher-env`):
+```bash
+PYTHONPATH=. markushgrapher-env/bin/python -m markushgrapher.eval config/predict.yaml
 ```
 
 The dataset path is configured in `config/datasets/datasets_predict.yaml`.
