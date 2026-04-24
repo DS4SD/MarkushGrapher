@@ -93,6 +93,7 @@ def get_smiles_metrics(
     gt_smiles_list = []
     gt_smiles_opt_list = []
     gt_stable_list = []
+    sample_id_list = []
 
     if read_predictions and os.path.exists(
         f"{training_args.output_dir}/{metrics_prefix}gt_smiles_list_{max_eval_samples}.pkl"
@@ -117,6 +118,11 @@ def get_smiles_metrics(
             "rb",
         ) as f:
             predicted_smiles_opt_list = pickle.load(f)
+        hf_dataset = dataset.get_dataset()
+        sample_id_list = [
+            str(hf_dataset[idx]["id"])
+            for idx in range(min(len(hf_dataset), len(predicted_smiles_list)))
+        ]
     else:
         if not os.path.exists(display_samples_output_dir):
             os.makedirs(display_samples_output_dir, exist_ok=True)
@@ -139,6 +145,7 @@ def get_smiles_metrics(
 
             if selected_indices and idx not in selected_indices:
                 continue
+            sample_id_list.append(sample_id)
 
             # Process and batch inputs
             encoding["input_ids"] = (
@@ -549,6 +556,30 @@ def get_smiles_metrics(
             "wb",
         ) as f:
             pickle.dump(predicted_smiles_opt_list, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    jsonl_path = (
+        f"{training_args.output_dir}/{metrics_prefix}predictions_{max_eval_samples}.jsonl"
+    )
+    with open(jsonl_path, "w") as f:
+        for sample_id, predicted_smiles, predicted_smiles_opt, gt_smiles, gt_smiles_opt in zip(
+            sample_id_list,
+            predicted_smiles_list,
+            predicted_smiles_opt_list,
+            gt_smiles_list,
+            gt_smiles_opt_list,
+        ):
+            json.dump(
+                {
+                    "id": sample_id,
+                    "cxsmiles": predicted_smiles,
+                    "cxsmiles_opt": predicted_smiles_opt,
+                    "gt_cxsmiles": gt_smiles,
+                    "gt_cxsmiles_opt": gt_smiles_opt,
+                },
+                f,
+            )
+            f.write("\n")
+    print(f"Predictions JSONL saved to: {jsonl_path}")
 
     # Save scores
     if save_scores:

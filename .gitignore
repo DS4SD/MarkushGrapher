@@ -26,6 +26,7 @@ chemicalocr-env/
 
 # Data & models (downloaded separately)
 data/hf/
+data/datasets/hf
 data/evaluation/
 data/predictions/
 data/visualization/

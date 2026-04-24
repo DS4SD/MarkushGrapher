@@ -1,5 +1,5 @@
 #!/bin/bash
-# MarkushGrapher 2.0 — CUDA Setup Script
+# MarkushGrapher 2.0 — CUDA Setup Script (UV Version)
 #
 # Usage:
 #   bash setup-cuda.sh
@@ -23,8 +23,20 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "=== MarkushGrapher 2.0 CUDA Setup ==="
+export UV_CACHE_DIR="/tmp/${USER:-uv}-cache"
+export UV_LINK_MODE=copy
+mkdir -p "$UV_CACHE_DIR"
+
+echo "=== MarkushGrapher 2.0 CUDA Setup (UV) ==="
 echo ""
+
+# ---------------------------------------------------------------------------
+# Ensure uv is available
+# ---------------------------------------------------------------------------
+if ! command -v uv &>/dev/null; then
+    echo "ERROR: uv is not installed. Please install it first." >&2
+    exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Environment A: chemicalocr-env
@@ -32,26 +44,26 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[1/6] Setting up chemicalocr-env (vllm + stock transformers)..."
 if [ ! -d "chemicalocr-env" ]; then
-    python3.10 -m venv chemicalocr-env
+    uv venv --python 3.10 chemicalocr-env
 fi
-source chemicalocr-env/bin/activate
+
+UV_PIP_A="uv pip install --python chemicalocr-env/bin/python"
 
 # Install the markushgrapher package for Chemical_OCR and markushgenerator,
 # but ignore its torch==2.2.0 pin — vllm needs torch >= 2.4
-pip install -e . --no-deps -q
-pip install \
+$UV_PIP_A -e . --no-deps -q
+$UV_PIP_A \
     "torch>=2.4" torchvision torchaudio \
     "transformers>=4.46" "tokenizers>=0.19" \
     "datasets" "pillow" "tqdm" "huggingface_hub" \
     "markushgenerator @ git+https://git@github.com/DS4SD/MarkushGenerator.git" \
-    "aiohttp" "s3fs" "fsspec==2023.6.0" \
+    "aiohttp" "s3fs" "fsspec>=2024.6.1" \
     "numpy<2" \
     -q
 
 # Install vllm — requires CUDA to be available at install time
-pip install vllm -q
+$UV_PIP_A vllm -q
 
-deactivate
 echo "       chemicalocr-env ready."
 echo ""
 
@@ -61,11 +73,12 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[2/6] Setting up markushgrapher-env (custom transformers fork)..."
 if [ ! -d "markushgrapher-env" ]; then
-    python3.10 -m venv markushgrapher-env
+    uv venv --python 3.10 markushgrapher-env
 fi
-source markushgrapher-env/bin/activate
 
-pip install -e . -q
+UV_PIP_B="uv pip install --python markushgrapher-env/bin/python"
+
+$UV_PIP_B -e . -q
 
 echo "[3/6] Installing transformers fork and MolScribe..."
 if [ ! -d "external/transformers" ]; then
@@ -74,14 +87,13 @@ fi
 if [ ! -d "external/MolScribe" ]; then
     git clone --quiet https://github.com/lucas-morin/MolScribe.git ./external/MolScribe
 fi
-pip install -e ./external/MolScribe --no-deps -q
+$UV_PIP_B -e ./external/MolScribe --no-deps -q
 
 echo "[4/6] Pinning numpy<2, pyonmttok==1.37.1, OpenNMT-py==2.2.0..."
-pip install "numpy<2" "pyonmttok==1.37.1" "OpenNMT-py==2.2.0" -q
+$UV_PIP_B "numpy<2" "pyonmttok==1.37.1" "OpenNMT-py==2.2.0" -q
 # Reinstall the transformers fork last so it wins over anything pulled above
-pip install -e ./external/transformers -q
+$UV_PIP_B -e ./external/transformers -q
 
-deactivate
 echo "       markushgrapher-env ready."
 echo ""
 

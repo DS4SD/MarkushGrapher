@@ -117,7 +117,54 @@ This runs the full pipeline:
 2. Runs **ChemicalOCR** to extract text labels and bounding boxes
 3. Runs **MarkushGrapher 2.0** to predict CXSMILES and substituent tables
 
-Visualizations are saved to `data/visualization/prediction/`.
+Run artifacts are saved under `data/hf/inference/`, including the OCR dataset,
+evaluation files, JSONL predictions, and visualizations.
+
+### Evaluation on an HF Dataset
+
+The same entrypoint can evaluate a Hugging Face dataset or a local dataset saved
+with `datasets.save_to_disk`. This is the recommended path for benchmark runs:
+the script loads the requested split, runs **ChemicalOCR**, then runs
+**MarkushGrapher 2.0** on the OCR-augmented dataset.
+
+For example, to evaluate IP5-M from the MarkushGrapher dataset collection:
+
+```bash
+bash scripts/inference/inference.sh \
+  --hf_dataset docling-project/MarkushGrapher-2-Datasets \
+  --hf_config ip5-markush \
+  --split test
+```
+
+For the IBM-internal IP5-M benchmark from
+`https://github.ibm.com/DeepSearch/MarkushGrapher-IBM`, first save or download the
+benchmark as a Hugging Face dataset on disk, then point the same script at that
+local path:
+
+```bash
+bash scripts/inference/inference.sh \
+  --hf_dataset ./data/hf/ip5-markush \
+  --split test
+```
+
+Each run creates an isolated directory under `data/hf/inference/`. The main
+outputs are:
+
+- `ocr/` — the benchmark split after ChemicalOCR has filled the `cells` column
+- `evaluation/predictions_<N>.jsonl` — one JSON object per sample, with `id`,
+  `cxsmiles`, `cxsmiles_opt`, `gt_cxsmiles`, and `gt_cxsmiles_opt`
+- `evaluation/scores_<N>.json` — aggregate evaluation metrics
+- `evaluation/*.pkl` — the legacy prediction lists used by existing tooling
+- `visualization/` — rendered prediction/debug images
+
+Use `--max_eval_samples` to run a smaller smoke test:
+
+```bash
+bash scripts/inference/inference.sh \
+  --hf_dataset ./data/hf/ip5-markush \
+  --split test \
+  --max_eval_samples 25
+```
 
 The script selects the Python interpreter and ChemicalOCR backend automatically based on which environments are installed:
 
@@ -204,10 +251,21 @@ The projected vision embedding (e1) is concatenated with the VTL embedding (e2) 
 
 ## Datasets
 
-Download the datasets from [HuggingFace](https://huggingface.co/datasets/docling-project/MarkushGrapher-2-Datasets):
+Download the raw dataset repository from [HuggingFace](https://huggingface.co/datasets/docling-project/MarkushGrapher-2-Datasets):
 ```bash
 huggingface-cli download docling-project/MarkushGrapher-2-Datasets --local-dir ./data/hf --repo-type dataset
 ```
+
+To download only the public IP5-M benchmark subset in the format expected by the
+evaluation code:
+```bash
+python -c "from datasets import load_dataset; load_dataset('docling-project/MarkushGrapher-2-Datasets', 'ip5-markush').save_to_disk('data/hf/ip5-markush')"
+```
+
+IBM-internal users can also obtain IP5-M from
+`https://github.ibm.com/DeepSearch/MarkushGrapher-IBM`. Once the benchmark is
+available as a local Hugging Face dataset, pass that path to
+`scripts/inference/inference.sh --hf_dataset`.
 
 ### Training Data
 
@@ -224,7 +282,14 @@ huggingface-cli download docling-project/MarkushGrapher-2-Datasets --local-dir .
 - **M2S** (103) — Real-world multimodal Markush structures with substituent tables
 - **USPTO-M** (74) — Real-world Markush structure images
 - **WildMol-M** (10k) — Large-scale semi-manually annotated Markush structures
-- **IP5-M** (1,000) — *New* — Manually annotated Markush structures from IP5 patent offices (1980–2025)
+- **IP5-M** — *New* — Manually annotated Markush structures from IP5 patent offices (1980–2025)
+
+Run end-to-end IP5-M evaluation, including ChemicalOCR:
+```bash
+bash scripts/inference/inference.sh \
+  --hf_dataset ./data/hf/ip5-markush \
+  --split test
+```
 
 **Molecular Structure Recognition (OCSR):**
 - USPTO (5,719), JPO (450), UOB (5,740), WildMol (10k)

@@ -22,7 +22,7 @@ def main():
     REMOVE_STEREO=True
     FIX_CXSMILES=True
 
-    max_eval_samples = 1000
+    max_eval_samples = data_args.max_eval_samples
     display_eval_samples = True
     max_display_eval_samples = 100
     display_markush_evaluation = True
