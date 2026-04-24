@@ -39,7 +39,7 @@ Choose the setup path that matches your hardware:
 
 ### NVIDIA GPU (CUDA)
 
-ChemicalOCR runs via [vllm](https://github.com/vllm-project/vllm) in a dedicated environment. To run this, you require Python 3.10+
+ChemicalOCR runs via [vllm](https://github.com/vllm-project/vllm) in a dedicated environment. To run this, you require Python 3.10
 
 ```bash
 bash setup-cuda.sh
@@ -133,17 +133,6 @@ For example, to evaluate IP5-M from the MarkushGrapher dataset collection:
 bash scripts/inference/inference.sh \
   --hf_dataset docling-project/MarkushGrapher-2-Datasets \
   --hf_config ip5-markush \
-  --split test
-```
-
-For the IBM-internal IP5-M benchmark from
-`https://github.ibm.com/DeepSearch/MarkushGrapher-IBM`, first save or download the
-benchmark as a Hugging Face dataset on disk, then point the same script at that
-local path:
-
-```bash
-bash scripts/inference/inference.sh \
-  --hf_dataset ./data/hf/ip5-markush \
   --split test
 ```
 
