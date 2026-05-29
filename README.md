@@ -303,14 +303,13 @@ If you find this repository useful, please consider citing:
 
 **MarkushGrapher-2:**
 ```bibtex
-@misc{strohmeyer2026markushgrapher2endtoendmultimodalrecognition,
-      title={MarkushGrapher-2: End-to-end Multimodal Recognition of Chemical Structures}, 
-      author={Tim Strohmeyer and Lucas Morin and Gerhard Ingmar Meijer and Valéry Weber and Ahmed Nassar and Peter Staar},
-      year={2026},
-      eprint={2603.28550},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2603.28550}, 
+@InProceedings{Strohmeyer_2026_CVPR,
+    author    = {Strohmeyer, Tim and Morin, Lucas and Meijer, Gerhard Ingmar and Weber, Valery and Nassar, Ahmed and Staar, Peter},
+    title     = {MarkushGrapher-2: End-to-end Multimodal Recognition of Chemical Structures},
+    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+    month     = {June},
+    year      = {2026},
+    pages     = {31176-31185}
 }
 ```
 
